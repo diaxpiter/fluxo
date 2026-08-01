@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { updateTransaction, deleteTransaction } from "@/app/dashboard/actions";
+import { formatCurrency } from "@/lib/currency";
 import type { Category } from "@/lib/types";
 
 type Row = {
@@ -12,10 +13,6 @@ type Row = {
   amount: number;
   balance: number;
 };
-
-function formatCurrency(amount: number, currency: string) {
-  return new Intl.NumberFormat("en-IE", { style: "currency", currency }).format(amount);
-}
 
 export function TransactionList({
   rows,
@@ -69,7 +66,7 @@ export function TransactionList({
                 <td className="px-4 py-2 text-foreground/60">{categoryName(row.category_id)}</td>
                 <td
                   className={`px-4 py-2 text-right tabular-nums ${
-                    row.amount < 0 ? "text-foreground" : "text-emerald-500"
+                    row.amount < 0 ? "text-red-500" : "text-emerald-500"
                   }`}
                 >
                   {row.amount >= 0 ? "+" : ""}

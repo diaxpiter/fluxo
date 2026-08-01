@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { DEFAULT_WIDGETS } from "@/lib/widgets";
 
 function signedAmount(formData: FormData) {
   const magnitude = Math.abs(Number(formData.get("amount")));
@@ -81,6 +82,24 @@ export async function updateStartingBalance(formData: FormData) {
     .update({ starting_balance: Number(formData.get("startingBalance")) })
     .eq("id", formData.get("accountId"))
     .eq("user_id", user.id);
+
+  revalidatePath("/dashboard");
+}
+
+export async function updateWidgetPrefs(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const widgets = DEFAULT_WIDGETS.map((w) => ({
+    key: w.key,
+    title: (formData.get(`title_${w.key}`) as string)?.trim() || w.title,
+    visible: formData.get(`visible_${w.key}`) === "on",
+  }));
+
+  await supabase.from("profiles").update({ widgets }).eq("id", user.id);
 
   revalidatePath("/dashboard");
 }

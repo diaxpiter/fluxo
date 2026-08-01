@@ -1,14 +1,14 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/app/auth/actions";
-import { TransactionForm } from "@/app/dashboard/transaction-form";
 import { TransactionList } from "@/app/dashboard/transaction-list";
 import { StartingBalanceEditor } from "@/app/dashboard/starting-balance-editor";
+import { AddTransactionFab } from "@/app/dashboard/add-transaction-fab";
+import { WidgetCard } from "@/app/dashboard/widget-card";
+import { WidgetCustomizer } from "@/app/dashboard/widget-customizer";
+import { formatCurrency } from "@/lib/currency";
+import { computeWidgetValues, DEFAULT_WIDGETS, type WidgetPref } from "@/lib/widgets";
 import type { Account, Category, Transaction } from "@/lib/types";
-
-function formatCurrency(amount: number, currency: string) {
-  return new Intl.NumberFormat("en-IE", { style: "currency", currency }).format(amount);
-}
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -24,7 +24,7 @@ export default async function DashboardPage() {
   const firstName = displayName?.split(" ")[0];
 
   const [{ data: profile }, { data: accounts }, { data: categories }] = await Promise.all([
-    supabase.from("profiles").select("currency").eq("id", user.id).single(),
+    supabase.from("profiles").select("currency, widgets").eq("id", user.id).single(),
     supabase
       .from("accounts")
       .select("*")
@@ -41,6 +41,7 @@ export default async function DashboardPage() {
   const account = (accounts as Account[] | null)?.[0] ?? null;
   const currency = profile?.currency ?? "EUR";
   const categoryList = (categories as Category[] | null) ?? [];
+  const widgetPrefs = (profile?.widgets as WidgetPref[] | null) ?? DEFAULT_WIDGETS;
 
   const { data: rawTransactions } = account
     ? await supabase
@@ -58,7 +59,8 @@ export default async function DashboardPage() {
     acc.push({ ...t, balance: previousBalance + Number(t.amount) });
     return acc;
   }, []);
-  const currentBalance = rows.at(-1)?.balance ?? account?.starting_balance ?? 0;
+
+  const widgetValues = computeWidgetValues(transactions, account?.starting_balance ?? 0);
 
   return (
     <main className="flex flex-1 flex-col px-4 py-12">
@@ -87,8 +89,12 @@ export default async function DashboardPage() {
             <div className="flex items-end justify-between rounded-xl border border-foreground/10 bg-foreground/[0.02] p-6">
               <div>
                 <p className="text-sm text-foreground/60">{account.name}</p>
-                <p className="mt-1 text-3xl font-semibold tracking-tight">
-                  {formatCurrency(currentBalance, currency)}
+                <p
+                  className={`mt-1 text-3xl font-semibold tracking-tight ${
+                    widgetValues.currentBalance < 0 ? "text-red-500" : "text-foreground"
+                  }`}
+                >
+                  {formatCurrency(widgetValues.currentBalance, currency)}
                 </p>
               </div>
               <StartingBalanceEditor
@@ -97,12 +103,42 @@ export default async function DashboardPage() {
               />
             </div>
 
-            <TransactionForm accountId={account.id} categories={categoryList} />
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-medium text-foreground/60">Overview</h2>
+                <WidgetCustomizer widgets={widgetPrefs} />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {widgetPrefs
+                  .filter((w) => w.visible)
+                  .map((w) => (
+                    <WidgetCard
+                      key={w.key}
+                      title={w.title}
+                      value={formatCurrency(widgetValues[w.key], currency)}
+                      tone={
+                        w.key === "end_of_month_projection"
+                          ? widgetValues[w.key] < 0
+                            ? "negative"
+                            : "neutral"
+                          : w.key === "incoming_this_week"
+                            ? "positive"
+                            : w.key === "bills_to_pay" || w.key === "paid_this_week" || w.key === "spent_this_month"
+                              ? "negative"
+                              : "neutral"
+                      }
+                    />
+                  ))}
+              </div>
+            </div>
 
             <TransactionList rows={rows} categories={categoryList} currency={currency} />
           </>
         )}
       </div>
+
+      {account && <AddTransactionFab accountId={account.id} categories={categoryList} />}
     </main>
   );
 }
