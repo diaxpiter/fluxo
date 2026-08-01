@@ -29,18 +29,20 @@ export function WidgetCustomizer({ widgets }: { widgets: WidgetPref[] }) {
         className="flex flex-col gap-2"
       >
         {widgets.map((w) => (
-          <div key={w.key} className="flex items-center gap-2">
+          <div key={w.key} className="flex flex-wrap items-center gap-2 border-b border-foreground/5 pb-2 last:border-0 last:pb-0">
             <input type="hidden" name="order" value={w.key} />
 
-            <input
-              type="checkbox"
-              name={`visible_${w.key}`}
-              defaultChecked={w.visible}
-              aria-label={`Show ${w.title}`}
-              className="h-4 w-4 shrink-0 cursor-pointer rounded border-foreground/30 accent-emerald-500"
-            />
-            <input type="text" name={`title_${w.key}`} defaultValue={w.title} className={`${fieldClass} flex-1`} />
-            <div className="flex shrink-0 items-center gap-1.5">
+            <div className="flex min-w-0 flex-1 items-center gap-2 basis-full sm:basis-auto">
+              <input
+                type="checkbox"
+                name={`visible_${w.key}`}
+                defaultChecked={w.visible}
+                aria-label={`Show ${w.title}`}
+                className="h-4 w-4 shrink-0 cursor-pointer rounded border-foreground/30 accent-emerald-500"
+              />
+              <input type="text" name={`title_${w.key}`} defaultValue={w.title} className={`${fieldClass} min-w-0 flex-1`} />
+            </div>
+            <div className="ml-6 flex shrink-0 items-center gap-1.5 sm:ml-0">
               <label htmlFor={`tier_${w.key}`} className="text-xs text-foreground/50">
                 Tier
               </label>

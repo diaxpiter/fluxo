@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_WIDGETS } from "@/lib/widgets";
+import { parseWorkbook, type MonthCheck } from "@/lib/import-excel";
 
 function signedAmount(formData: FormData) {
   const magnitude = Math.abs(Number(formData.get("amount")));
@@ -108,6 +109,62 @@ export async function updateWidgetPrefs(formData: FormData) {
   await supabase.from("profiles").update({ widgets }).eq("id", user.id);
 
   revalidatePath("/dashboard");
+}
+
+export type ImportResult =
+  | { ok: true; insertedCount: number; startingBalance: number; monthChecks: MonthCheck[] }
+  | { ok: false; error: string };
+
+export async function importTransactions(formData: FormData): Promise<ImportResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  const accountId = formData.get("accountId") as string;
+  const file = formData.get("file") as File | null;
+  if (!file || file.size === 0) return { ok: false, error: "No file selected." };
+
+  let parsed;
+  try {
+    const buffer = await file.arrayBuffer();
+    parsed = parseWorkbook(buffer);
+  } catch {
+    return { ok: false, error: "Couldn't read that file — is it a valid .xlsx workbook?" };
+  }
+
+  if (parsed.transactions.length === 0) {
+    return { ok: false, error: "No transactions found in that file." };
+  }
+
+  const { error: balanceError } = await supabase
+    .from("accounts")
+    .update({ starting_balance: parsed.startingBalance })
+    .eq("id", accountId)
+    .eq("user_id", user.id);
+  if (balanceError) return { ok: false, error: balanceError.message };
+
+  const { error: insertError } = await supabase.from("transactions").insert(
+    parsed.transactions.map((t) => ({
+      user_id: user.id,
+      account_id: accountId,
+      category_id: null,
+      date: t.date,
+      description: t.description,
+      amount: t.amount,
+    })),
+  );
+  if (insertError) return { ok: false, error: insertError.message };
+
+  revalidatePath("/dashboard");
+
+  return {
+    ok: true,
+    insertedCount: parsed.transactions.length,
+    startingBalance: parsed.startingBalance,
+    monthChecks: parsed.monthChecks,
+  };
 }
 
 export async function addCategory(formData: FormData) {

@@ -4,6 +4,7 @@ import { logout } from "@/app/auth/actions";
 import { TransactionList } from "@/app/dashboard/transaction-list";
 import { StartingBalanceEditor } from "@/app/dashboard/starting-balance-editor";
 import { AddTransactionFab } from "@/app/dashboard/add-transaction-fab";
+import { ImportTransactions } from "@/app/dashboard/import-transactions";
 import { WidgetCard } from "@/app/dashboard/widget-card";
 import { WidgetCustomizer } from "@/app/dashboard/widget-customizer";
 import { formatCurrency } from "@/lib/currency";
@@ -71,17 +72,17 @@ export default async function DashboardPage() {
   const widgetValues = computeWidgetValues(transactions, account?.starting_balance ?? 0);
 
   return (
-    <main className="flex flex-1 flex-col px-4 py-8 sm:py-12">
+    <main className="flex flex-1 flex-col px-4 pb-28 pt-8 sm:py-12">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
             <p className="text-sm font-medium tracking-tight text-foreground/50">
               <span className="text-emerald-500">.</span>fluxo
             </p>
-            <h1 className="mt-2 text-xl font-semibold tracking-tight">Hi, {firstName}</h1>
-            <p className="mt-0.5 text-sm text-foreground/50">{user.email}</p>
+            <h1 className="mt-2 truncate text-xl font-semibold tracking-tight">Hi, {firstName}</h1>
+            <p className="mt-0.5 truncate text-sm text-foreground/50">{user.email}</p>
           </div>
-          <form action={logout}>
+          <form action={logout} className="shrink-0">
             <button type="submit" className={btnGhostClass}>
               Log out
             </button>
@@ -92,11 +93,11 @@ export default async function DashboardPage() {
           <div className={`${cardClass} p-6 text-sm text-foreground/50`}>Setting up your account…</div>
         ) : (
           <>
-            <div className={`${cardClass} flex items-end justify-between p-6`}>
-              <div>
+            <div className={`${cardClass} flex flex-wrap items-end justify-between gap-3 p-5 sm:p-6`}>
+              <div className="min-w-0">
                 <p className="text-sm text-foreground/50">{account.name}</p>
                 <p
-                  className={`mt-1 text-3xl font-semibold tracking-tight ${numericClass} ${
+                  className={`mt-1 text-2xl font-semibold tracking-tight sm:text-3xl ${numericClass} ${
                     widgetValues.currentBalance < 0 ? "text-red-400" : "text-foreground"
                   }`}
                 >
@@ -129,7 +130,13 @@ export default async function DashboardPage() {
               </div>
             </div>
 
-            <TransactionList rows={rows} categories={categoryList} currency={currency} />
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-medium text-foreground/50">Ledger</h2>
+                <ImportTransactions accountId={account.id} currency={currency} />
+              </div>
+              <TransactionList rows={rows} categories={categoryList} currency={currency} />
+            </div>
           </>
         )}
       </div>

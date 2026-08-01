@@ -24,7 +24,7 @@ export function AddTransactionFab({
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Add transaction"
-        className="fixed bottom-6 right-6 z-40 flex h-14 w-14 cursor-pointer items-center justify-center rounded-full bg-foreground text-2xl font-light text-background shadow-[0_8px_30px_rgba(0,0,0,0.35)] transition-transform duration-150 hover:scale-105 active:scale-95"
+        className="fixed right-6 bottom-[calc(1.5rem+env(safe-area-inset-bottom))] z-40 flex h-14 w-14 cursor-pointer items-center justify-center rounded-full bg-foreground text-2xl font-light text-background shadow-[0_8px_30px_rgba(0,0,0,0.35)] transition-transform duration-150 hover:scale-105 active:scale-95"
       >
         +
       </button>
