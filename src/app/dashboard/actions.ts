@@ -93,11 +93,15 @@ export async function updateWidgetPrefs(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) return;
 
-  const widgets = DEFAULT_WIDGETS.map((w) => ({
-    key: w.key,
-    title: (formData.get(`title_${w.key}`) as string)?.trim() || w.title,
-    visible: formData.get(`visible_${w.key}`) === "on",
-  }));
+  const orderedKeys = formData.getAll("order") as string[];
+  const widgets = orderedKeys.map((key) => {
+    const fallback = DEFAULT_WIDGETS.find((w) => w.key === key);
+    return {
+      key,
+      title: (formData.get(`title_${key}`) as string)?.trim() || fallback?.title || key,
+      visible: formData.get(`visible_${key}`) === "on",
+    };
+  });
 
   await supabase.from("profiles").update({ widgets }).eq("id", user.id);
 
