@@ -1,6 +1,6 @@
 {
-  "name": "Fluxo",
-  "short_name": "Fluxo",
+  "name": ".fluxo",
+  "short_name": ".fluxo",
   "description": "See what's coming in, what's going out, and what's actually left to spend.",
   "start_url": "/dashboard",
   "scope": "/",

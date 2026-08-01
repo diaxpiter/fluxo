@@ -12,7 +12,7 @@ export default async function LoginPage({
     <main className="flex flex-1 items-center justify-center px-4 py-16">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">Fluxo</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">.fluxo</h1>
           <p className="mt-2 text-sm text-foreground/60">
             Log in to your account
           </p>

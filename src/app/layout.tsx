@@ -14,13 +14,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Fluxo",
+  title: ".fluxo",
   description: "See what's coming in, what's going out, and what's actually left to spend.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Fluxo",
+    title: ".fluxo",
   },
   icons: {
     icon: [
