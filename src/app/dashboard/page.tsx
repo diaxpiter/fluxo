@@ -13,6 +13,7 @@ export default async function DashboardPage() {
   }
 
   const displayName = (user.user_metadata?.display_name as string) || user.email;
+  const firstName = displayName?.split(" ")[0];
 
   return (
     <main className="flex flex-1 flex-col px-4 py-12">
@@ -20,7 +21,7 @@ export default async function DashboardPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold tracking-tight">
-              Welcome, {displayName}
+              Hi, {firstName}
             </h1>
             <p className="mt-1 text-sm text-foreground/60">{user.email}</p>
           </div>
