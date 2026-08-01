@@ -96,10 +96,12 @@ export async function updateWidgetPrefs(formData: FormData) {
   const orderedKeys = formData.getAll("order") as string[];
   const widgets = orderedKeys.map((key) => {
     const fallback = DEFAULT_WIDGETS.find((w) => w.key === key);
+    const tier = Number(formData.get(`tier_${key}`));
     return {
       key,
       title: (formData.get(`title_${key}`) as string)?.trim() || fallback?.title || key,
       visible: formData.get(`visible_${key}`) === "on",
+      tier: Number.isFinite(tier) && tier > 0 ? tier : (fallback?.tier ?? 1),
     };
   });
 

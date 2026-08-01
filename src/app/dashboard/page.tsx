@@ -8,8 +8,15 @@ import { WidgetCard } from "@/app/dashboard/widget-card";
 import { WidgetCustomizer } from "@/app/dashboard/widget-customizer";
 import { formatCurrency } from "@/lib/currency";
 import { cardClass, btnGhostClass, numericClass } from "@/lib/ui";
-import { computeWidgetValues, DEFAULT_WIDGETS, type WidgetPref } from "@/lib/widgets";
+import { computeWidgetValues, groupByTier, DEFAULT_WIDGETS, type WidgetKey, type WidgetPref } from "@/lib/widgets";
 import type { Account, Category, Transaction } from "@/lib/types";
+
+function toneFor(key: WidgetKey, value: number): "neutral" | "negative" | "positive" {
+  if (key === "end_of_month_projection") return value < 0 ? "negative" : "neutral";
+  if (key === "incoming_this_week") return "positive";
+  if (key === "bills_to_pay" || key === "paid_this_week" || key === "spent_this_month") return "negative";
+  return "neutral";
+}
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -105,28 +112,20 @@ export default async function DashboardPage() {
                 <WidgetCustomizer widgets={widgetPrefs} />
               </div>
 
-              <div className="flex flex-wrap gap-3">
-                {widgetPrefs
-                  .filter((w) => w.visible)
-                  .map((w, i) => (
-                    <WidgetCard
-                      key={w.key}
-                      title={w.title}
-                      value={formatCurrency(widgetValues[w.key], currency)}
-                      delayMs={i * 40}
-                      tone={
-                        w.key === "end_of_month_projection"
-                          ? widgetValues[w.key] < 0
-                            ? "negative"
-                            : "neutral"
-                          : w.key === "incoming_this_week"
-                            ? "positive"
-                            : w.key === "bills_to_pay" || w.key === "paid_this_week" || w.key === "spent_this_month"
-                              ? "negative"
-                              : "neutral"
-                      }
-                    />
-                  ))}
+              <div className="flex flex-col gap-3">
+                {groupByTier(widgetPrefs.filter((w) => w.visible)).map((tierWidgets, tierIndex) => (
+                  <div key={tierWidgets.map((w) => w.key).join("-")} className="flex gap-3">
+                    {tierWidgets.map((w, i) => (
+                      <WidgetCard
+                        key={w.key}
+                        title={w.title}
+                        value={formatCurrency(widgetValues[w.key], currency)}
+                        delayMs={(tierIndex * 2 + i) * 40}
+                        tone={toneFor(w.key, widgetValues[w.key])}
+                      />
+                    ))}
+                  </div>
+                ))}
               </div>
             </div>
 

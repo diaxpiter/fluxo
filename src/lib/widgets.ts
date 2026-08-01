@@ -12,16 +12,29 @@ export type WidgetPref = {
   key: WidgetKey;
   title: string;
   visible: boolean;
+  /** Tiles sharing a tier render in the same row, splitting it evenly.
+   *  A tile alone in its tier stretches to fill the whole row. */
+  tier: number;
 };
 
 export const DEFAULT_WIDGETS: WidgetPref[] = [
-  { key: "end_of_month_projection", title: "Predicted balance until end of month", visible: true },
-  { key: "bills_to_pay", title: "Bills to be paid this month", visible: true },
-  { key: "incoming_this_week", title: "Money to come this week", visible: true },
-  { key: "paid_this_week", title: "Amount paid this week", visible: true },
-  { key: "spent_this_month", title: "Spent this month", visible: true },
-  { key: "biggest_expense_this_month", title: "Biggest expense this month", visible: true },
+  { key: "end_of_month_projection", title: "Predicted balance until end of month", visible: true, tier: 1 },
+  { key: "bills_to_pay", title: "Bills to be paid this month", visible: true, tier: 2 },
+  { key: "incoming_this_week", title: "Money to come this week", visible: true, tier: 2 },
+  { key: "paid_this_week", title: "Amount paid this week", visible: true, tier: 3 },
+  { key: "spent_this_month", title: "Spent this month", visible: true, tier: 3 },
+  { key: "biggest_expense_this_month", title: "Biggest expense this month", visible: true, tier: 4 },
 ];
+
+export function groupByTier(widgets: WidgetPref[]) {
+  const groups = new Map<number, WidgetPref[]>();
+  for (const w of widgets) {
+    const group = groups.get(w.tier);
+    if (group) group.push(w);
+    else groups.set(w.tier, [w]);
+  }
+  return [...groups.entries()].sort(([a], [b]) => a - b).map(([, group]) => group);
+}
 
 function pad(n: number) {
   return String(n).padStart(2, "0");

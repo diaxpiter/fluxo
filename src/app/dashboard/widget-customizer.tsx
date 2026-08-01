@@ -7,35 +7,20 @@ import type { WidgetPref } from "@/lib/widgets";
 
 export function WidgetCustomizer({ widgets }: { widgets: WidgetPref[] }) {
   const [open, setOpen] = useState(false);
-  const [order, setOrder] = useState(widgets);
 
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={() => {
-          setOrder(widgets);
-          setOpen(true);
-        }}
-        className={`${linkClass} text-xs`}
-      >
+      <button type="button" onClick={() => setOpen(true)} className={`${linkClass} text-xs`}>
         Customize
       </button>
     );
   }
 
-  function move(index: number, direction: -1 | 1) {
-    setOrder((prev) => {
-      const target = index + direction;
-      if (target < 0 || target >= prev.length) return prev;
-      const next = [...prev];
-      [next[index], next[target]] = [next[target], next[index]];
-      return next;
-    });
-  }
-
   return (
     <div className={`${cardClass} animate-fade-in-up p-4`}>
+      <p className="mb-3 text-xs text-foreground/50">
+        Widgets sharing a tier split that row evenly; a widget alone in its tier fills the row.
+      </p>
       <form
         action={async (formData) => {
           await updateWidgetPrefs(formData);
@@ -43,39 +28,32 @@ export function WidgetCustomizer({ widgets }: { widgets: WidgetPref[] }) {
         }}
         className="flex flex-col gap-2"
       >
-        {order.map((w, i) => (
+        {widgets.map((w) => (
           <div key={w.key} className="flex items-center gap-2">
             <input type="hidden" name="order" value={w.key} />
-
-            <div className="flex flex-col leading-none">
-              <button
-                type="button"
-                onClick={() => move(i, -1)}
-                disabled={i === 0}
-                aria-label="Move up"
-                className="cursor-pointer px-1 py-0.5 text-foreground/40 transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-20"
-              >
-                ▲
-              </button>
-              <button
-                type="button"
-                onClick={() => move(i, 1)}
-                disabled={i === order.length - 1}
-                aria-label="Move down"
-                className="cursor-pointer px-1 py-0.5 text-foreground/40 transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-20"
-              >
-                ▼
-              </button>
-            </div>
 
             <input
               type="checkbox"
               name={`visible_${w.key}`}
               defaultChecked={w.visible}
               aria-label={`Show ${w.title}`}
-              className="h-4 w-4 cursor-pointer rounded border-foreground/30 accent-emerald-500"
+              className="h-4 w-4 shrink-0 cursor-pointer rounded border-foreground/30 accent-emerald-500"
             />
             <input type="text" name={`title_${w.key}`} defaultValue={w.title} className={`${fieldClass} flex-1`} />
+            <div className="flex shrink-0 items-center gap-1.5">
+              <label htmlFor={`tier_${w.key}`} className="text-xs text-foreground/50">
+                Tier
+              </label>
+              <input
+                id={`tier_${w.key}`}
+                type="number"
+                name={`tier_${w.key}`}
+                min={1}
+                max={9}
+                defaultValue={w.tier}
+                className={`${fieldClass} w-14 text-center`}
+              />
+            </div>
           </div>
         ))}
 
