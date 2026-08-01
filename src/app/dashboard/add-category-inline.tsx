@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { addCategory } from "@/app/dashboard/actions";
+import { fieldClass, linkClass } from "@/lib/ui";
 
 export function AddCategoryInline() {
   const [open, setOpen] = useState(false);
@@ -9,11 +10,7 @@ export function AddCategoryInline() {
 
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="mt-1 self-start text-xs text-foreground/60 underline underline-offset-4 hover:text-foreground"
-      >
+      <button type="button" onClick={() => setOpen(true)} className={`${linkClass} mt-1 self-start text-xs`}>
         + New category
       </button>
     );
@@ -35,16 +32,12 @@ export function AddCategoryInline() {
         autoFocus
         required
         placeholder="Category name"
-        className="w-full rounded-md border border-foreground/15 bg-transparent px-2 py-1 text-xs outline-none focus:border-foreground/40"
+        className={`${fieldClass} w-full py-1 text-xs`}
       />
-      <button type="submit" className="shrink-0 text-xs font-medium underline underline-offset-4">
+      <button type="submit" className={`${linkClass} shrink-0 text-xs`}>
         Save
       </button>
-      <button
-        type="button"
-        onClick={() => setOpen(false)}
-        className="shrink-0 text-xs text-foreground/60"
-      >
+      <button type="button" onClick={() => setOpen(false)} className={`${linkClass} shrink-0 text-xs`}>
         Cancel
       </button>
     </form>

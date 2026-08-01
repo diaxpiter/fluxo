@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { updateWidgetPrefs } from "@/app/dashboard/actions";
+import { cardClass, fieldClass, btnPrimaryClass, linkClass } from "@/lib/ui";
 import type { WidgetPref } from "@/lib/widgets";
 
 export function WidgetCustomizer({ widgets }: { widgets: WidgetPref[] }) {
@@ -9,18 +10,14 @@ export function WidgetCustomizer({ widgets }: { widgets: WidgetPref[] }) {
 
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="text-xs text-foreground/60 underline underline-offset-4 hover:text-foreground"
-      >
+      <button type="button" onClick={() => setOpen(true)} className={`${linkClass} text-xs`}>
         Customize
       </button>
     );
   }
 
   return (
-    <div className="rounded-xl border border-foreground/10 bg-foreground/[0.02] p-4">
+    <div className={`${cardClass} animate-fade-in-up p-4`}>
       <form
         action={async (formData) => {
           await updateWidgetPrefs(formData);
@@ -34,25 +31,17 @@ export function WidgetCustomizer({ widgets }: { widgets: WidgetPref[] }) {
               type="checkbox"
               name={`visible_${w.key}`}
               defaultChecked={w.visible}
-              className="h-4 w-4 rounded border-foreground/30"
+              className="h-4 w-4 cursor-pointer rounded border-foreground/30 accent-emerald-500"
             />
-            <input
-              type="text"
-              name={`title_${w.key}`}
-              defaultValue={w.title}
-              className="flex-1 rounded-md border border-foreground/15 bg-transparent px-2 py-1 text-sm outline-none focus:border-foreground/40"
-            />
+            <input type="text" name={`title_${w.key}`} defaultValue={w.title} className={`${fieldClass} flex-1`} />
           </div>
         ))}
 
-        <div className="mt-1 flex gap-3">
-          <button
-            type="submit"
-            className="rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background"
-          >
+        <div className="mt-1 flex items-center gap-4">
+          <button type="submit" className={btnPrimaryClass}>
             Save
           </button>
-          <button type="button" onClick={() => setOpen(false)} className="text-xs text-foreground/60">
+          <button type="button" onClick={() => setOpen(false)} className={`${linkClass} text-xs`}>
             Cancel
           </button>
         </div>

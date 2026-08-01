@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { updateStartingBalance } from "@/app/dashboard/actions";
+import { fieldClass, linkClass } from "@/lib/ui";
 
 export function StartingBalanceEditor({
   accountId,
@@ -14,11 +15,7 @@ export function StartingBalanceEditor({
 
   if (!editing) {
     return (
-      <button
-        type="button"
-        onClick={() => setEditing(true)}
-        className="text-xs text-foreground/60 underline underline-offset-4 hover:text-foreground"
-      >
+      <button type="button" onClick={() => setEditing(true)} className={`${linkClass} text-xs`}>
         Edit starting balance
       </button>
     );
@@ -39,16 +36,12 @@ export function StartingBalanceEditor({
         step="0.01"
         defaultValue={startingBalance}
         autoFocus
-        className="w-28 rounded-md border border-foreground/15 bg-transparent px-2 py-1 text-sm outline-none focus:border-foreground/40"
+        className={`${fieldClass} w-28`}
       />
-      <button type="submit" className="text-xs font-medium underline underline-offset-4">
+      <button type="submit" className={`${linkClass} text-xs font-medium`}>
         Save
       </button>
-      <button
-        type="button"
-        onClick={() => setEditing(false)}
-        className="text-xs text-foreground/60"
-      >
+      <button type="button" onClick={() => setEditing(false)} className={`${linkClass} text-xs`}>
         Cancel
       </button>
     </form>
