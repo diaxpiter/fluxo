@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { updateTransaction, deleteTransaction } from "@/app/dashboard/actions";
 import { formatCurrency } from "@/lib/currency";
-import { cardClass, fieldClass, btnPrimaryClass, linkClass, numericClass } from "@/lib/ui";
+import { cardClass, fieldClass, btnPrimaryClass, btnGhostClass, btnDestructiveClass, linkClass, numericClass } from "@/lib/ui";
 import type { Category } from "@/lib/types";
 
 type Row = {
@@ -70,7 +70,7 @@ export function TransactionList({
                 <button type="button" onClick={() => setEditingId(row.id)} className={`${linkClass} text-xs`}>
                   Edit
                 </button>
-                <DeleteButton id={row.id} />
+                <DeleteButton id={row.id} description={row.description} amount={row.amount} currency={currency} />
               </div>
             </div>
           ),
@@ -122,7 +122,7 @@ export function TransactionList({
                       <button type="button" onClick={() => setEditingId(row.id)} className={`${linkClass} text-xs`}>
                         Edit
                       </button>
-                      <DeleteButton id={row.id} />
+                      <DeleteButton id={row.id} description={row.description} amount={row.amount} currency={currency} />
                     </div>
                   </td>
                 </tr>
@@ -135,37 +135,57 @@ export function TransactionList({
   );
 }
 
-function DeleteButton({ id }: { id: string }) {
-  const [confirming, setConfirming] = useState(false);
+function DeleteButton({
+  id,
+  description,
+  amount,
+  currency,
+}: {
+  id: string;
+  description: string;
+  amount: number;
+  currency: string;
+}) {
+  const [open, setOpen] = useState(false);
 
-  if (!confirming) {
-    return (
+  return (
+    <>
       <button
         type="button"
-        onClick={() => setConfirming(true)}
+        onClick={() => setOpen(true)}
         className={`${linkClass} text-xs hover:text-red-400`}
       >
         Delete
       </button>
-    );
-  }
 
-  return (
-    <span className="flex items-center gap-2 whitespace-nowrap text-xs">
-      <span className="text-foreground/50">Delete it?</span>
-      <form action={deleteTransaction}>
-        <input type="hidden" name="id" value={id} />
-        <button
-          type="submit"
-          className="cursor-pointer font-medium text-red-400 underline decoration-red-400/30 underline-offset-4 hover:text-red-300 hover:decoration-red-300"
+      {open && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center"
+          onClick={() => setOpen(false)}
         >
-          Confirm
-        </button>
-      </form>
-      <button type="button" onClick={() => setConfirming(false)} className={linkClass}>
-        Cancel
-      </button>
-    </span>
+          <div
+            className="animate-modal-in w-full max-w-sm rounded-2xl border border-foreground/10 bg-background p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold tracking-tight">Delete transaction?</h2>
+            <p className="mt-2 text-sm text-foreground/60">
+              &ldquo;{description}&rdquo; ({formatCurrency(amount, currency)}) will be permanently deleted.
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button type="button" onClick={() => setOpen(false)} className={btnGhostClass}>
+                Cancel
+              </button>
+              <form action={deleteTransaction}>
+                <input type="hidden" name="id" value={id} />
+                <button type="submit" className={`${btnDestructiveClass} w-full`}>
+                  Delete
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
