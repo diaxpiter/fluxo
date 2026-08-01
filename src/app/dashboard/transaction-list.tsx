@@ -66,16 +66,11 @@ export function TransactionList({
                   </p>
                 </div>
               </div>
-              <div className="mt-2 flex gap-4">
+              <div className="mt-2 flex items-center gap-4">
                 <button type="button" onClick={() => setEditingId(row.id)} className={`${linkClass} text-xs`}>
                   Edit
                 </button>
-                <form action={deleteTransaction}>
-                  <input type="hidden" name="id" value={row.id} />
-                  <button type="submit" className={`${linkClass} text-xs hover:text-red-400`}>
-                    Delete
-                  </button>
-                </form>
+                <DeleteButton id={row.id} />
               </div>
             </div>
           ),
@@ -123,16 +118,11 @@ export function TransactionList({
                     {formatCurrency(row.balance, currency)}
                   </td>
                   <td className="px-4 py-2.5 text-right">
-                    <div className="flex justify-end gap-3">
+                    <div className="flex items-center justify-end gap-3">
                       <button type="button" onClick={() => setEditingId(row.id)} className={`${linkClass} text-xs`}>
                         Edit
                       </button>
-                      <form action={deleteTransaction}>
-                        <input type="hidden" name="id" value={row.id} />
-                        <button type="submit" className={`${linkClass} text-xs hover:text-red-400`}>
-                          Delete
-                        </button>
-                      </form>
+                      <DeleteButton id={row.id} />
                     </div>
                   </td>
                 </tr>
@@ -142,6 +132,40 @@ export function TransactionList({
         </table>
       </div>
     </div>
+  );
+}
+
+function DeleteButton({ id }: { id: string }) {
+  const [confirming, setConfirming] = useState(false);
+
+  if (!confirming) {
+    return (
+      <button
+        type="button"
+        onClick={() => setConfirming(true)}
+        className={`${linkClass} text-xs hover:text-red-400`}
+      >
+        Delete
+      </button>
+    );
+  }
+
+  return (
+    <span className="flex items-center gap-2 whitespace-nowrap text-xs">
+      <span className="text-foreground/50">Delete it?</span>
+      <form action={deleteTransaction}>
+        <input type="hidden" name="id" value={id} />
+        <button
+          type="submit"
+          className="cursor-pointer font-medium text-red-400 underline decoration-red-400/30 underline-offset-4 hover:text-red-300 hover:decoration-red-300"
+        >
+          Confirm
+        </button>
+      </form>
+      <button type="button" onClick={() => setConfirming(false)} className={linkClass}>
+        Cancel
+      </button>
+    </span>
   );
 }
 
