@@ -16,7 +16,7 @@ export function WidgetCard({
 
   return (
     <div
-      className={`${cardClass} animate-fade-in-up flex min-h-[100px] flex-col justify-between gap-2 p-4`}
+      className={`${cardClass} animate-fade-in-up flex min-h-[100px] grow basis-[calc(50%-0.375rem)] flex-col justify-between gap-2 p-4 sm:basis-[calc(33.333%-0.5rem)]`}
       style={{ animationDelay: `${delayMs}ms` }}
     >
       <p className="text-xs text-foreground/50">{title}</p>

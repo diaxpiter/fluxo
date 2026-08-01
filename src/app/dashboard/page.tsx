@@ -105,7 +105,7 @@ export default async function DashboardPage() {
                 <WidgetCustomizer widgets={widgetPrefs} />
               </div>
 
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div className="flex flex-wrap gap-3">
                 {widgetPrefs
                   .filter((w) => w.visible)
                   .map((w, i) => (
