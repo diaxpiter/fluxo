@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { monthBoundsYmd, normalizeWidgetPrefs, todayYmd, type WidgetPref } from "@/lib/widgets";
 import type { Dictionary } from "@/lib/i18n/dictionary";
-import type { Account, Category, IncomeSource, RecurringBill, Transaction } from "@/lib/types";
+import type { Account, AllocationRule, Category, IncomeSource, RecurringBill, Transaction } from "@/lib/types";
 
 export async function getDashboardContext(supabase: SupabaseClient, userId: string) {
   const [
@@ -10,6 +10,7 @@ export async function getDashboardContext(supabase: SupabaseClient, userId: stri
     { data: categories },
     { data: recurringBills },
     { data: incomeSources },
+    { data: allocationRules },
   ] = await Promise.all([
     supabase.from("profiles").select("currency, widgets").eq("id", userId).single(),
     supabase
@@ -33,6 +34,11 @@ export async function getDashboardContext(supabase: SupabaseClient, userId: stri
       .select("*")
       .eq("user_id", userId)
       .order("created_at", { ascending: true }),
+    supabase
+      .from("allocation_rules")
+      .select("*")
+      .eq("user_id", userId)
+      .order("priority_order", { ascending: true }),
   ]);
 
   const accountList = (accounts as Account[] | null) ?? [];
@@ -41,6 +47,7 @@ export async function getDashboardContext(supabase: SupabaseClient, userId: stri
   const widgetPrefs = normalizeWidgetPrefs(profile?.widgets as WidgetPref[] | null);
   const recurringBillList = (recurringBills as RecurringBill[] | null) ?? [];
   const incomeSourceList = (incomeSources as IncomeSource[] | null) ?? [];
+  const allocationRuleList = (allocationRules as AllocationRule[] | null) ?? [];
 
   return {
     accounts: accountList,
@@ -49,6 +56,7 @@ export async function getDashboardContext(supabase: SupabaseClient, userId: stri
     widgetPrefs,
     recurringBills: recurringBillList,
     incomeSources: incomeSourceList,
+    allocationRules: allocationRuleList,
   };
 }
 

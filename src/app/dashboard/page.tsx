@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { RecentActivityList } from "@/app/dashboard/recent-activity-list";
 import { WidgetCard } from "@/app/dashboard/widget-card";
 import { TransferButton } from "@/app/dashboard/transfer-button";
+import { AddTransactionFab } from "@/app/dashboard/add-transaction-fab";
 import { formatCurrency } from "@/lib/currency";
 import { cardClass, linkClass, numericClass } from "@/lib/ui";
 import {
@@ -161,6 +162,18 @@ export default async function DashboardPage() {
           </>
         )}
       </div>
+
+      {accounts.length > 0 && (
+        <AddTransactionFab
+          accounts={accounts}
+          defaultAccountId={(visibleAccounts[0] ?? accounts[0]).id}
+          categories={categories}
+          t={t.addTransaction}
+          addCategoryT={t.addCategory}
+          common={t.common}
+          categoryLabels={t.categories}
+        />
+      )}
     </main>
   );
 }

@@ -72,3 +72,16 @@ export type IncomeSource = {
   is_active: boolean;
   created_at: string;
 };
+
+export type AllocationMethod = "fixed_amount" | "percentage" | "remainder";
+
+export type AllocationRule = {
+  id: string;
+  user_id: string;
+  target_account_id: string;
+  priority_order: number;
+  method: AllocationMethod;
+  value: number | null;
+  is_active: boolean;
+  created_at: string;
+};

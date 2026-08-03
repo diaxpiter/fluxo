@@ -6,6 +6,7 @@ import { LanguageSelector } from "@/app/dashboard/language-selector";
 import { AccountManager } from "@/app/dashboard/account-manager";
 import { RecurringBillsManager } from "@/app/dashboard/recurring-bills-manager";
 import { IncomeSourcesManager } from "@/app/dashboard/income-sources-manager";
+import { AllocationRulesManager } from "@/app/dashboard/allocation-rules-manager";
 import {
   computeAccountBalances,
   getDashboardContext,
@@ -29,10 +30,8 @@ export default async function SettingsPage() {
   const locale = await getLocale();
   const t = getDictionary(locale);
 
-  const { accounts, categories, currency, widgetPrefs, recurringBills, incomeSources } = await getDashboardContext(
-    supabase,
-    user.id,
-  );
+  const { accounts, categories, currency, widgetPrefs, recurringBills, incomeSources, allocationRules } =
+    await getDashboardContext(supabase, user.id);
   const transactions = await getTransactionsForAccounts(supabase, accounts.map((a) => a.id));
   const balances = computeAccountBalances(accounts, transactions);
   const paidBillIds = await getPaidRecurringBillIds(supabase);
@@ -77,6 +76,20 @@ export default async function SettingsPage() {
               sources={incomeSources}
               receivedSourceIds={receivedSourceIds}
               categories={categories}
+              accounts={accounts}
+              allocationRules={allocationRules}
+              currency={currency}
+              locale={locale}
+              t={t}
+            />
+          </div>
+        )}
+
+        {accounts.length > 0 && (
+          <div className="flex flex-col gap-3">
+            <h2 className="text-sm font-medium text-foreground/50">{t.allocationRules.heading}</h2>
+            <AllocationRulesManager
+              rules={allocationRules}
               accounts={accounts}
               currency={currency}
               locale={locale}

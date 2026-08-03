@@ -83,7 +83,8 @@ export default async function HistoryPage({
 
       {account && (
         <AddTransactionFab
-          accountId={account.id}
+          accounts={accounts}
+          defaultAccountId={account.id}
           categories={categories}
           t={t.addTransaction}
           addCategoryT={t.addCategory}

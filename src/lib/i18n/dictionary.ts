@@ -156,6 +156,23 @@ export type Dictionary = {
     deleteTitle: string;
     /** Placeholder: {name} */
     deleteBody: string;
+    allocationPreviewHeading: string;
+    /** Placeholders: {amount}, {account} */
+    allocationRemaining: string;
+  };
+  allocationRules: {
+    heading: string;
+    empty: string;
+    targetAccountLabel: string;
+    methodLabel: string;
+    methodFixedAmount: string;
+    methodPercentage: string;
+    methodRemainder: string;
+    valueLabel: string;
+    addButton: string;
+    deleteTitle: string;
+    /** Placeholder: {account} */
+    deleteBody: string;
   };
   addCategory: {
     newCategory: string;

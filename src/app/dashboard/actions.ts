@@ -9,7 +9,8 @@ import { getDictionary, getLocale } from "@/lib/i18n/dictionary";
 import { format } from "@/lib/i18n/format";
 import { LOCALE_COOKIE, isLocale } from "@/lib/i18n/locales";
 import { accountDisplayName } from "@/lib/dashboard-data";
-import type { Account } from "@/lib/types";
+import { computeAllocation } from "@/lib/allocation";
+import type { Account, AllocationRule } from "@/lib/types";
 
 function signedAmount(formData: FormData) {
   const magnitude = Math.abs(Number(formData.get("amount")));
@@ -369,17 +370,66 @@ export async function receiveIncomeSource(formData: FormData) {
   if (!user) return;
 
   const categoryId = formData.get("categoryId");
+  const accountId = formData.get("accountId") as string;
   const magnitude = Math.abs(Number(formData.get("amount")));
+  const date = formData.get("date");
 
-  await supabase.from("transactions").insert({
-    user_id: user.id,
-    account_id: formData.get("accountId"),
-    category_id: categoryId ? categoryId : null,
-    date: formData.get("date"),
-    description: formData.get("description"),
-    amount: magnitude,
-    income_source_id: formData.get("sourceId"),
-  });
+  const rows: Record<string, unknown>[] = [
+    {
+      user_id: user.id,
+      account_id: accountId,
+      category_id: categoryId ? categoryId : null,
+      date,
+      description: formData.get("description"),
+      amount: magnitude,
+      income_source_id: formData.get("sourceId"),
+    },
+  ];
+
+  // Recompute the allocation server-side from the current rules -- never trust
+  // a client-submitted breakdown, the client preview is display-only.
+  const [{ data: rules }, { data: accounts }] = await Promise.all([
+    supabase.from("allocation_rules").select("*").eq("user_id", user.id).eq("is_active", true),
+    supabase.from("accounts").select("*").eq("user_id", user.id),
+  ]);
+
+  const accountList = (accounts as Account[] | null) ?? [];
+  const t = getDictionary(await getLocale());
+  const sourceAccount = accountList.find((a) => a.id === accountId);
+  const sourceName = sourceAccount ? accountDisplayName(sourceAccount, t.common.mainAccount) : "";
+
+  const lines = computeAllocation(magnitude, (rules as AllocationRule[] | null) ?? []);
+  for (const line of lines) {
+    if (line.targetAccountId === accountId) continue; // stays put, no transfer needed
+    const targetAccount = accountList.find((a) => a.id === line.targetAccountId);
+    if (!targetAccount) continue; // rule points at an account that's gone/not ours
+
+    const transferGroupId = crypto.randomUUID();
+    const targetName = accountDisplayName(targetAccount, t.common.mainAccount);
+
+    rows.push(
+      {
+        user_id: user.id,
+        account_id: accountId,
+        category_id: null,
+        date,
+        description: format(t.transfer.toDescription, { name: targetName }),
+        amount: -line.amount,
+        transfer_group_id: transferGroupId,
+      },
+      {
+        user_id: user.id,
+        account_id: line.targetAccountId,
+        category_id: null,
+        date,
+        description: format(t.transfer.fromDescription, { name: sourceName }),
+        amount: line.amount,
+        transfer_group_id: transferGroupId,
+      },
+    );
+  }
+
+  await supabase.from("transactions").insert(rows);
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/history");
@@ -505,6 +555,88 @@ export async function transferBetweenAccounts(formData: FormData): Promise<Trans
   revalidatePath("/dashboard/history");
 
   return { ok: true };
+}
+
+function allocationRuleFields(formData: FormData) {
+  const method = formData.get("method") as string;
+  const valueRaw = formData.get("value") as string | null;
+
+  return {
+    target_account_id: formData.get("targetAccountId"),
+    method,
+    value: method === "remainder" ? null : Math.abs(Number(valueRaw)),
+    is_active: formData.get("isActive") === "on",
+  };
+}
+
+export async function addAllocationRule(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const { count } = await supabase
+    .from("allocation_rules")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id);
+
+  await supabase.from("allocation_rules").insert({
+    user_id: user.id,
+    priority_order: count ?? 0,
+    ...allocationRuleFields(formData),
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/settings");
+}
+
+export async function updateAllocationRule(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  await supabase
+    .from("allocation_rules")
+    .update(allocationRuleFields(formData))
+    .eq("id", formData.get("id"))
+    .eq("user_id", user.id);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/settings");
+}
+
+export async function deleteAllocationRule(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  await supabase.from("allocation_rules").delete().eq("id", formData.get("id")).eq("user_id", user.id);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/settings");
+}
+
+export async function updateAllocationRuleOrder(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const orderedIds = formData.getAll("order") as string[];
+  await Promise.all(
+    orderedIds.map((id, index) =>
+      supabase.from("allocation_rules").update({ priority_order: index }).eq("id", id).eq("user_id", user.id),
+    ),
+  );
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/settings");
 }
 
 export async function addCategory(formData: FormData) {

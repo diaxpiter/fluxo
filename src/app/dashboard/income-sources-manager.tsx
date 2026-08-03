@@ -21,13 +21,15 @@ import {
 } from "@/lib/ui";
 import type { Dictionary } from "@/lib/i18n/dictionary";
 import { accountDisplayName, categoryDisplayName } from "@/lib/dashboard-data";
-import type { Account, Category, IncomeScheduleType, IncomeSource } from "@/lib/types";
+import { computeAllocation } from "@/lib/allocation";
+import type { Account, AllocationRule, Category, IncomeScheduleType, IncomeSource } from "@/lib/types";
 
 export function IncomeSourcesManager({
   sources,
   receivedSourceIds,
   categories,
   accounts,
+  allocationRules,
   currency,
   locale,
   t,
@@ -36,6 +38,7 @@ export function IncomeSourcesManager({
   receivedSourceIds: string[];
   categories: Category[];
   accounts: Account[];
+  allocationRules: AllocationRule[];
   currency: string;
   locale: string;
   t: Dictionary;
@@ -62,6 +65,7 @@ export function IncomeSourcesManager({
               categoryName={categoryName(source.category_id)}
               categories={categories}
               accounts={accounts}
+              allocationRules={allocationRules}
               currency={currency}
               locale={locale}
               t={t}
@@ -87,6 +91,7 @@ function SourceRow({
   categoryName,
   categories,
   accounts,
+  allocationRules,
   currency,
   locale,
   t,
@@ -96,6 +101,7 @@ function SourceRow({
   categoryName: string;
   categories: Category[];
   accounts: Account[];
+  allocationRules: AllocationRule[];
   currency: string;
   locale: string;
   t: Dictionary;
@@ -161,7 +167,14 @@ function SourceRow({
           {received ? (
             <span className="text-emerald-500">{t.incomeSources.receivedThisMonth}</span>
           ) : (
-            <ReceiveButton source={source} t={t} />
+            <ReceiveButton
+              source={source}
+              accounts={accounts}
+              allocationRules={allocationRules}
+              currency={currency}
+              locale={locale}
+              t={t}
+            />
           )}
           <button type="button" onClick={() => setEditing(true)} className={linkClass}>
             {t.common.edit}
@@ -173,11 +186,36 @@ function SourceRow({
   );
 }
 
-function ReceiveButton({ source, t }: { source: IncomeSource; t: Dictionary }) {
+function ReceiveButton({
+  source,
+  accounts,
+  allocationRules,
+  currency,
+  locale,
+  t,
+}: {
+  source: IncomeSource;
+  accounts: Account[];
+  allocationRules: AllocationRule[];
+  currency: string;
+  locale: string;
+  t: Dictionary;
+}) {
   const [open, setOpen] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const [isPending, startTransition] = useTransition();
+  const [amount, setAmount] = useState(String(source.expected_amount ?? ""));
   const today = new Date().toISOString().slice(0, 10);
+
+  const numericAmount = Number(amount) || 0;
+  const activeRuleCount = allocationRules.filter((r) => r.is_active).length;
+  const lines = computeAllocation(numericAmount, allocationRules).filter(
+    (l) => l.targetAccountId !== source.account_id,
+  );
+  const allocatedTotal = lines.reduce((sum, l) => sum + l.amount, 0);
+  const remaining = Math.max(0, numericAmount - allocatedTotal);
+  const sourceAccount = accounts.find((a) => a.id === source.account_id);
+  const sourceAccountName = sourceAccount ? accountDisplayName(sourceAccount, t.common.mainAccount) : "";
 
   return (
     <>
@@ -238,10 +276,34 @@ function ReceiveButton({ source, t }: { source: IncomeSource; t: Dictionary }) {
                   step="0.01"
                   min="0"
                   required
-                  defaultValue={source.expected_amount ?? undefined}
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
                   className={fieldClass}
                 />
               </div>
+
+              {activeRuleCount > 0 && numericAmount > 0 && (
+                <div className="rounded-lg border border-foreground/10 bg-foreground/[0.03] p-3 text-xs">
+                  <p className="mb-1.5 font-medium text-foreground/70">{t.incomeSources.allocationPreviewHeading}</p>
+                  <ul className="flex flex-col gap-1 text-foreground/60">
+                    {lines.map((line) => {
+                      const target = accounts.find((a) => a.id === line.targetAccountId);
+                      const targetName = target ? accountDisplayName(target, t.common.mainAccount) : "";
+                      return (
+                        <li key={line.ruleId} className={numericClass}>
+                          {formatCurrency(line.amount, currency, locale)} → {targetName}
+                        </li>
+                      );
+                    })}
+                    <li className={numericClass}>
+                      {format(t.incomeSources.allocationRemaining, {
+                        amount: formatCurrency(remaining, currency, locale),
+                        account: sourceAccountName,
+                      })}
+                    </li>
+                  </ul>
+                </div>
+              )}
 
               <button type="submit" disabled={isPending} className={`${btnPositiveClass} mt-1`}>
                 {t.incomeSources.markAsReceived}

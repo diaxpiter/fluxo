@@ -5,18 +5,20 @@ import { addTransaction } from "@/app/dashboard/actions";
 import { AddCategoryInline } from "@/app/dashboard/add-category-inline";
 import { fieldClass, btnPositiveClass, btnDestructiveClass } from "@/lib/ui";
 import type { Dictionary } from "@/lib/i18n/dictionary";
-import { categoryDisplayName } from "@/lib/dashboard-data";
-import type { Category } from "@/lib/types";
+import { accountDisplayName, categoryDisplayName } from "@/lib/dashboard-data";
+import type { Account, Category } from "@/lib/types";
 
 export function AddTransactionFab({
-  accountId,
+  accounts,
+  defaultAccountId,
   categories,
   t,
   addCategoryT,
   common,
   categoryLabels,
 }: {
-  accountId: string;
+  accounts: Account[];
+  defaultAccountId: string;
   categories: Category[];
   t: Dictionary["addTransaction"];
   addCategoryT: Dictionary["addCategory"];
@@ -71,7 +73,20 @@ export function AddTransactionFab({
               }}
               className="flex flex-col gap-4"
             >
-              <input type="hidden" name="accountId" value={accountId} />
+              {accounts.length > 1 ? (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-foreground/50">{common.account}</label>
+                  <select name="accountId" defaultValue={defaultAccountId} className={fieldClass}>
+                    {accounts.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {accountDisplayName(a, common.mainAccount)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <input type="hidden" name="accountId" value={defaultAccountId} />
+              )}
 
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-foreground/50">{t.dateLabel}</label>
