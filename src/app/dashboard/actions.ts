@@ -282,6 +282,94 @@ export async function payRecurringBill(formData: FormData) {
   revalidatePath("/dashboard/settings");
 }
 
+function incomeSourceFields(formData: FormData) {
+  const scheduleType = formData.get("scheduleType") === "irregular" ? "irregular" : "fixed_monthly_date";
+  const expectedAmountRaw = formData.get("expectedAmount") as string | null;
+  const categoryId = formData.get("categoryId");
+
+  return {
+    name: (formData.get("name") as string)?.trim(),
+    schedule_type: scheduleType,
+    day_of_month: scheduleType === "fixed_monthly_date" ? Number(formData.get("dayOfMonth")) : null,
+    weekend_holiday_rule: (formData.get("weekendShift") as string) || "none",
+    expected_amount: expectedAmountRaw ? Math.abs(Number(expectedAmountRaw)) : null,
+    account_id: formData.get("accountId"),
+    category_id: categoryId ? categoryId : null,
+    is_active: formData.get("isActive") === "on",
+  };
+}
+
+export async function addIncomeSource(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  await supabase.from("income_sources").insert({
+    user_id: user.id,
+    ...incomeSourceFields(formData),
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/settings");
+}
+
+export async function updateIncomeSource(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  await supabase
+    .from("income_sources")
+    .update(incomeSourceFields(formData))
+    .eq("id", formData.get("id"))
+    .eq("user_id", user.id);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/settings");
+}
+
+export async function deleteIncomeSource(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  await supabase.from("income_sources").delete().eq("id", formData.get("id")).eq("user_id", user.id);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/settings");
+}
+
+export async function receiveIncomeSource(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const categoryId = formData.get("categoryId");
+  const magnitude = Math.abs(Number(formData.get("amount")));
+
+  await supabase.from("transactions").insert({
+    user_id: user.id,
+    account_id: formData.get("accountId"),
+    category_id: categoryId ? categoryId : null,
+    date: formData.get("date"),
+    description: formData.get("description"),
+    amount: magnitude,
+    income_source_id: formData.get("sourceId"),
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/history");
+  revalidatePath("/dashboard/settings");
+}
+
 export async function addCategory(formData: FormData) {
   const supabase = await createClient();
   const {

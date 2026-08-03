@@ -45,11 +45,14 @@ export default async function DashboardPage() {
   const displayName = (user.user_metadata?.display_name as string) || user.email;
   const firstName = displayName?.split(" ")[0];
 
-  const { account, categories, currency, widgetPrefs, recurringBills } = await getDashboardContext(supabase, user.id);
+  const { account, categories, currency, widgetPrefs, recurringBills, incomeSources } = await getDashboardContext(
+    supabase,
+    user.id,
+  );
   const rows = await getLedgerRows(supabase, account?.id ?? null, account?.starting_balance ?? 0);
   const today = todayYmd();
   const recentRows = rows.filter((r) => r.date <= today).slice(-RECENT_COUNT);
-  const widgetValues = computeWidgetValues(rows, account?.starting_balance ?? 0, recurringBills);
+  const widgetValues = computeWidgetValues(rows, account?.starting_balance ?? 0, recurringBills, incomeSources);
 
   return (
     <main className="flex flex-1 flex-col px-4 pb-24 pt-8 sm:py-12">

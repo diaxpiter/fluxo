@@ -1,4 +1,4 @@
-import type { RecurringBill, Transaction } from "@/lib/types";
+import type { IncomeSource, RecurringBill, Transaction } from "@/lib/types";
 
 export type WidgetKey =
   | "end_of_month_projection"
@@ -112,10 +112,34 @@ function dueDateThisMonth(dueDayOfMonth: number, now: Date) {
   return ymd(new Date(now.getFullYear(), now.getMonth(), day));
 }
 
+function isWeekend(d: Date) {
+  const day = d.getDay();
+  return day === 0 || day === 6;
+}
+
+/**
+ * This month's occurrence of a fixed income source's day, clamped to the month's
+ * last day, shifted off weekends per weekendRule. Holiday-awareness isn't
+ * implemented yet — a payday landing on a public holiday won't shift until a
+ * real holiday calendar is wired up.
+ */
+function shiftedDateThisMonth(dayOfMonth: number, weekendRule: IncomeSource["weekend_holiday_rule"], now: Date) {
+  const day = Math.min(dayOfMonth, daysInMonth(now.getFullYear(), now.getMonth()));
+  let date = new Date(now.getFullYear(), now.getMonth(), day);
+
+  if (weekendRule !== "none") {
+    const step = weekendRule === "shift_earlier" ? -1 : 1;
+    while (isWeekend(date)) date = addDays(date, step);
+  }
+
+  return ymd(date);
+}
+
 export function computeWidgetValues(
   transactions: Transaction[],
   startingBalance: number,
   recurringBills: RecurringBill[] = [],
+  incomeSources: IncomeSource[] = [],
   now = new Date(),
 ) {
   const today = ymd(now);
@@ -173,6 +197,27 @@ export function computeWidgetValues(
     billsToPay += amount;
     const dueDate = dueDateThisMonth(bill.due_day_of_month, now);
     if (dueDate >= today && dueDate <= next7End) billsNext7Days += amount;
+  }
+
+  const receivedIncomeSourceIds = new Set(
+    transactions
+      .filter((t) => t.income_source_id && t.date >= monthStart && t.date <= monthEnd)
+      .map((t) => t.income_source_id),
+  );
+
+  for (const source of incomeSources) {
+    if (
+      !source.is_active ||
+      source.schedule_type !== "fixed_monthly_date" ||
+      source.day_of_month == null ||
+      receivedIncomeSourceIds.has(source.id)
+    ) {
+      continue;
+    }
+    const expectedDate = shiftedDateThisMonth(source.day_of_month, source.weekend_holiday_rule, now);
+    if (expectedDate >= today && expectedDate <= weekEnd) {
+      incomingThisWeek += source.expected_amount ?? 0;
+    }
   }
 
   return {

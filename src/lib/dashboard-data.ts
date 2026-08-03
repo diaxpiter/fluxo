@@ -1,37 +1,55 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { monthBoundsYmd, normalizeWidgetPrefs, type WidgetPref } from "@/lib/widgets";
 import type { Dictionary } from "@/lib/i18n/dictionary";
-import type { Account, Category, RecurringBill, Transaction } from "@/lib/types";
+import type { Account, Category, IncomeSource, RecurringBill, Transaction } from "@/lib/types";
 
 export async function getDashboardContext(supabase: SupabaseClient, userId: string) {
-  const [{ data: profile }, { data: accounts }, { data: categories }, { data: recurringBills }] =
-    await Promise.all([
-      supabase.from("profiles").select("currency, widgets").eq("id", userId).single(),
-      supabase
-        .from("accounts")
-        .select("*")
-        .eq("user_id", userId)
-        .eq("is_archived", false)
-        .order("created_at", { ascending: true }),
-      supabase
-        .from("categories")
-        .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: true }),
-      supabase
-        .from("recurring_bills")
-        .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: true }),
-    ]);
+  const [
+    { data: profile },
+    { data: accounts },
+    { data: categories },
+    { data: recurringBills },
+    { data: incomeSources },
+  ] = await Promise.all([
+    supabase.from("profiles").select("currency, widgets").eq("id", userId).single(),
+    supabase
+      .from("accounts")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("is_archived", false)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("categories")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("recurring_bills")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("income_sources")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true }),
+  ]);
 
   const account = (accounts as Account[] | null)?.[0] ?? null;
   const currency = profile?.currency ?? "EUR";
   const categoryList = (categories as Category[] | null) ?? [];
   const widgetPrefs = normalizeWidgetPrefs(profile?.widgets as WidgetPref[] | null);
   const recurringBillList = (recurringBills as RecurringBill[] | null) ?? [];
+  const incomeSourceList = (incomeSources as IncomeSource[] | null) ?? [];
 
-  return { account, categories: categoryList, currency, widgetPrefs, recurringBills: recurringBillList };
+  return {
+    account,
+    categories: categoryList,
+    currency,
+    widgetPrefs,
+    recurringBills: recurringBillList,
+    incomeSources: incomeSourceList,
+  };
 }
 
 /** The account-creation trigger seeds every new account with this literal English name. */
@@ -75,6 +93,26 @@ export async function getPaidRecurringBillIds(
     .lte("date", end);
 
   return (data ?? []).map((row) => row.recurring_bill_id as string);
+}
+
+/** Ids of income sources already received (linked to a real transaction) this month. */
+export async function getReceivedIncomeSourceIds(
+  supabase: SupabaseClient,
+  accountId: string | null,
+  now = new Date(),
+): Promise<string[]> {
+  if (!accountId) return [];
+
+  const { start, end } = monthBoundsYmd(now);
+  const { data } = await supabase
+    .from("transactions")
+    .select("income_source_id")
+    .eq("account_id", accountId)
+    .not("income_source_id", "is", null)
+    .gte("date", start)
+    .lte("date", end);
+
+  return (data ?? []).map((row) => row.income_source_id as string);
 }
 
 export type LedgerRow = Transaction & { balance: number };

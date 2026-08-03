@@ -5,7 +5,13 @@ import { StartingBalanceEditor } from "@/app/dashboard/starting-balance-editor";
 import { WidgetCustomizer } from "@/app/dashboard/widget-customizer";
 import { LanguageSelector } from "@/app/dashboard/language-selector";
 import { RecurringBillsManager } from "@/app/dashboard/recurring-bills-manager";
-import { accountDisplayName, getDashboardContext, getPaidRecurringBillIds } from "@/lib/dashboard-data";
+import { IncomeSourcesManager } from "@/app/dashboard/income-sources-manager";
+import {
+  accountDisplayName,
+  getDashboardContext,
+  getPaidRecurringBillIds,
+  getReceivedIncomeSourceIds,
+} from "@/lib/dashboard-data";
 import { getDictionary, getLocale } from "@/lib/i18n/dictionary";
 import { cardClass, btnGhostClass } from "@/lib/ui";
 
@@ -22,8 +28,12 @@ export default async function SettingsPage() {
   const locale = await getLocale();
   const t = getDictionary(locale);
 
-  const { account, categories, currency, widgetPrefs, recurringBills } = await getDashboardContext(supabase, user.id);
+  const { account, categories, currency, widgetPrefs, recurringBills, incomeSources } = await getDashboardContext(
+    supabase,
+    user.id,
+  );
   const paidBillIds = await getPaidRecurringBillIds(supabase, account?.id ?? null);
+  const receivedSourceIds = await getReceivedIncomeSourceIds(supabase, account?.id ?? null);
 
   return (
     <main className="flex flex-1 flex-col px-4 pb-24 pt-8 sm:py-12">
@@ -58,6 +68,21 @@ export default async function SettingsPage() {
             <RecurringBillsManager
               bills={recurringBills}
               paidBillIds={paidBillIds}
+              categories={categories}
+              accountId={account.id}
+              currency={currency}
+              locale={locale}
+              t={t}
+            />
+          </div>
+        )}
+
+        {account && (
+          <div className="flex flex-col gap-3">
+            <h2 className="text-sm font-medium text-foreground/50">{t.incomeSources.heading}</h2>
+            <IncomeSourcesManager
+              sources={incomeSources}
+              receivedSourceIds={receivedSourceIds}
               categories={categories}
               accountId={account.id}
               currency={currency}

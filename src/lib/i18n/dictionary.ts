@@ -105,6 +105,29 @@ export type Dictionary = {
     /** Placeholder: {name} */
     deleteBody: string;
   };
+  incomeSources: {
+    heading: string;
+    empty: string;
+    nameLabel: string;
+    scheduleTypeLabel: string;
+    fixedMonthlyLabel: string;
+    irregularLabel: string;
+    dayOfMonthLabel: string;
+    weekendShiftLabel: string;
+    weekendShiftNone: string;
+    weekendShiftEarlier: string;
+    weekendShiftLater: string;
+    expectedAmountLabel: string;
+    addButton: string;
+    markAsReceived: string;
+    receivedThisMonth: string;
+    /** Placeholder: {day} */
+    dayBadge: string;
+    irregularBadge: string;
+    deleteTitle: string;
+    /** Placeholder: {name} */
+    deleteBody: string;
+  };
   addCategory: {
     newCategory: string;
     namePlaceholder: string;
