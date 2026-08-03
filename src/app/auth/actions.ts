@@ -11,10 +11,21 @@ export async function login(formData: FormData) {
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
 
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
     redirect(`/login?error=${encodeURIComponent(error.message)}`);
+  }
+
+  // One-time sync (not done on every request) so switching devices/browsers
+  // picks up the saved language preference without adding a DB round trip
+  // to every navigation via middleware.
+  const { data: profile } = await supabase.from("profiles").select("language").eq("id", data.user.id).single();
+  if (isLocale(profile?.language)) {
+    const cookieStore = await cookies();
+    if (cookieStore.get(LOCALE_COOKIE)?.value !== profile.language) {
+      cookieStore.set(LOCALE_COOKIE, profile.language, { path: "/", maxAge: 60 * 60 * 24 * 365 });
+    }
   }
 
   redirect("/dashboard");

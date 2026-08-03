@@ -4,7 +4,8 @@ import { logout } from "@/app/auth/actions";
 import { StartingBalanceEditor } from "@/app/dashboard/starting-balance-editor";
 import { WidgetCustomizer } from "@/app/dashboard/widget-customizer";
 import { LanguageSelector } from "@/app/dashboard/language-selector";
-import { accountDisplayName, getDashboardContext } from "@/lib/dashboard-data";
+import { RecurringBillsManager } from "@/app/dashboard/recurring-bills-manager";
+import { accountDisplayName, getDashboardContext, getPaidRecurringBillIds } from "@/lib/dashboard-data";
 import { getDictionary, getLocale } from "@/lib/i18n/dictionary";
 import { cardClass, btnGhostClass } from "@/lib/ui";
 
@@ -21,7 +22,8 @@ export default async function SettingsPage() {
   const locale = await getLocale();
   const t = getDictionary(locale);
 
-  const { account, widgetPrefs } = await getDashboardContext(supabase, user.id);
+  const { account, categories, currency, widgetPrefs, recurringBills } = await getDashboardContext(supabase, user.id);
+  const paidBillIds = await getPaidRecurringBillIds(supabase, account?.id ?? null);
 
   return (
     <main className="flex flex-1 flex-col px-4 pb-24 pt-8 sm:py-12">
@@ -47,6 +49,21 @@ export default async function SettingsPage() {
                 common={t.common}
               />
             </div>
+          </div>
+        )}
+
+        {account && (
+          <div className="flex flex-col gap-3">
+            <h2 className="text-sm font-medium text-foreground/50">{t.recurringBills.heading}</h2>
+            <RecurringBillsManager
+              bills={recurringBills}
+              paidBillIds={paidBillIds}
+              categories={categories}
+              accountId={account.id}
+              currency={currency}
+              locale={locale}
+              t={t}
+            />
           </div>
         )}
 

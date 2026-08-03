@@ -6,6 +6,7 @@ import { formatCurrency } from "@/lib/currency";
 import { cardClass, fieldClass, btnPrimaryClass, btnGhostClass, btnDestructiveClass, linkClass, numericClass } from "@/lib/ui";
 import type { Dictionary } from "@/lib/i18n/dictionary";
 import { format } from "@/lib/i18n/format";
+import { categoryDisplayName } from "@/lib/dashboard-data";
 import type { Category } from "@/lib/types";
 
 type Row = {
@@ -24,6 +25,7 @@ export function TransactionList({
   locale,
   t,
   common,
+  categoryLabels,
 }: {
   rows: Row[];
   categories: Category[];
@@ -31,9 +33,13 @@ export function TransactionList({
   locale: string;
   t: Dictionary["transactionList"];
   common: Dictionary["common"];
+  categoryLabels: Dictionary["categories"];
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
-  const categoryName = (id: string | null) => categories.find((c) => c.id === id)?.name ?? common.uncategorized;
+  const categoryName = (id: string | null) => {
+    const category = categories.find((c) => c.id === id);
+    return category ? categoryDisplayName(category, categoryLabels) : common.uncategorized;
+  };
 
   if (rows.length === 0) {
     return <div className={`${cardClass} p-6 text-center text-sm text-foreground/50`}>{t.empty}</div>;
@@ -48,7 +54,14 @@ export function TransactionList({
         {newestFirst.map((row) =>
           editingId === row.id ? (
             <div key={row.id} className="border-b border-foreground/5 bg-foreground/[0.03] p-4 last:border-0">
-              <EditForm row={row} categories={categories} t={t} common={common} onDone={() => setEditingId(null)} />
+              <EditForm
+                row={row}
+                categories={categories}
+                t={t}
+                common={common}
+                categoryLabels={categoryLabels}
+                onDone={() => setEditingId(null)}
+              />
             </div>
           ) : (
             <div key={row.id} className="border-b border-foreground/5 p-4 last:border-0">
@@ -106,7 +119,14 @@ export function TransactionList({
               editingId === row.id ? (
                 <tr key={row.id} className="border-b border-foreground/5 bg-foreground/[0.03] last:border-0">
                   <td colSpan={6} className="px-4 py-3">
-                    <EditForm row={row} categories={categories} t={t} common={common} onDone={() => setEditingId(null)} />
+                    <EditForm
+                row={row}
+                categories={categories}
+                t={t}
+                common={common}
+                categoryLabels={categoryLabels}
+                onDone={() => setEditingId(null)}
+              />
                   </td>
                 </tr>
               ) : (
@@ -219,12 +239,14 @@ function EditForm({
   categories,
   t,
   common,
+  categoryLabels,
   onDone,
 }: {
   row: Row;
   categories: Category[];
   t: Dictionary["transactionList"];
   common: Dictionary["common"];
+  categoryLabels: Dictionary["categories"];
   onDone: () => void;
 }) {
   return (
@@ -259,7 +281,7 @@ function EditForm({
           <option value="">{common.uncategorized}</option>
           {categories.map((c) => (
             <option key={c.id} value={c.id}>
-              {c.name}
+              {categoryDisplayName(c, categoryLabels)}
             </option>
           ))}
         </select>

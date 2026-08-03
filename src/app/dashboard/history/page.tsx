@@ -45,6 +45,7 @@ export default async function HistoryPage() {
             locale={locale}
             t={t.transactionList}
             common={t.common}
+            categoryLabels={t.categories}
           />
         ) : (
           <div className="flex flex-col gap-3">
@@ -61,6 +62,7 @@ export default async function HistoryPage() {
                 locale={locale}
                 t={t.transactionList}
                 common={t.common}
+                categoryLabels={t.categories}
                 defaultOpen={i === 0}
               />
             ))}
@@ -75,6 +77,7 @@ export default async function HistoryPage() {
           t={t.addTransaction}
           addCategoryT={t.addCategory}
           common={t.common}
+          categoryLabels={t.categories}
         />
       )}
     </main>

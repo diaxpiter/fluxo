@@ -1,29 +1,37 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { normalizeWidgetPrefs, type WidgetPref } from "@/lib/widgets";
-import type { Account, Category, Transaction } from "@/lib/types";
+import { monthBoundsYmd, normalizeWidgetPrefs, type WidgetPref } from "@/lib/widgets";
+import type { Dictionary } from "@/lib/i18n/dictionary";
+import type { Account, Category, RecurringBill, Transaction } from "@/lib/types";
 
 export async function getDashboardContext(supabase: SupabaseClient, userId: string) {
-  const [{ data: profile }, { data: accounts }, { data: categories }] = await Promise.all([
-    supabase.from("profiles").select("currency, widgets").eq("id", userId).single(),
-    supabase
-      .from("accounts")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("is_archived", false)
-      .order("created_at", { ascending: true }),
-    supabase
-      .from("categories")
-      .select("*")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: true }),
-  ]);
+  const [{ data: profile }, { data: accounts }, { data: categories }, { data: recurringBills }] =
+    await Promise.all([
+      supabase.from("profiles").select("currency, widgets").eq("id", userId).single(),
+      supabase
+        .from("accounts")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("is_archived", false)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("categories")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("recurring_bills")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: true }),
+    ]);
 
   const account = (accounts as Account[] | null)?.[0] ?? null;
   const currency = profile?.currency ?? "EUR";
   const categoryList = (categories as Category[] | null) ?? [];
   const widgetPrefs = normalizeWidgetPrefs(profile?.widgets as WidgetPref[] | null);
+  const recurringBillList = (recurringBills as RecurringBill[] | null) ?? [];
 
-  return { account, categories: categoryList, currency, widgetPrefs };
+  return { account, categories: categoryList, currency, widgetPrefs, recurringBills: recurringBillList };
 }
 
 /** The account-creation trigger seeds every new account with this literal English name. */
@@ -31,6 +39,42 @@ const DEFAULT_ACCOUNT_NAME = "Main Account";
 
 export function accountDisplayName(account: Account, mainAccountLabel: string): string {
   return account.name === DEFAULT_ACCOUNT_NAME ? mainAccountLabel : account.name;
+}
+
+/** The signup trigger seeds every new account with these literal English category names. */
+const SEED_CATEGORY_LABELS: Record<string, keyof Dictionary["categories"]> = {
+  Income: "income",
+  Housing: "housing",
+  Utilities: "utilities",
+  Subscriptions: "subscriptions",
+  Savings: "savings",
+  Discretionary: "discretionary",
+  Other: "other",
+};
+
+export function categoryDisplayName(category: Category, categoryLabels: Dictionary["categories"]): string {
+  const key = SEED_CATEGORY_LABELS[category.name];
+  return key ? categoryLabels[key] : category.name;
+}
+
+/** Ids of recurring bills already paid (linked to a real transaction) this month. */
+export async function getPaidRecurringBillIds(
+  supabase: SupabaseClient,
+  accountId: string | null,
+  now = new Date(),
+): Promise<string[]> {
+  if (!accountId) return [];
+
+  const { start, end } = monthBoundsYmd(now);
+  const { data } = await supabase
+    .from("transactions")
+    .select("recurring_bill_id")
+    .eq("account_id", accountId)
+    .not("recurring_bill_id", "is", null)
+    .gte("date", start)
+    .lte("date", end);
+
+  return (data ?? []).map((row) => row.recurring_bill_id as string);
 }
 
 export type LedgerRow = Transaction & { balance: number };

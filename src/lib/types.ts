@@ -25,5 +25,20 @@ export type Transaction = {
   description: string;
   amount: number;
   is_projected: boolean;
+  recurring_bill_id: string | null;
+  created_at: string;
+};
+
+export type RecurringBill = {
+  id: string;
+  user_id: string;
+  account_id: string;
+  category_id: string | null;
+  name: string;
+  is_variable: boolean;
+  amount: number | null;
+  estimated_amount: number | null;
+  due_day_of_month: number;
+  is_active: boolean;
   created_at: string;
 };

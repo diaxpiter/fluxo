@@ -20,6 +20,16 @@ export type Dictionary = {
     settingUpAccount: string;
     mainAccount: string;
   };
+  /** Labels for the literal English category names the signup trigger seeds every account with. */
+  categories: {
+    income: string;
+    housing: string;
+    utilities: string;
+    subscriptions: string;
+    savings: string;
+    discretionary: string;
+    other: string;
+  };
   home: {
     /** Placeholder: {firstName} */
     greeting: string;
@@ -76,6 +86,24 @@ export type Dictionary = {
     amountPlaceholder: string;
     moneyIn: string;
     moneyOut: string;
+  };
+  recurringBills: {
+    heading: string;
+    empty: string;
+    nameLabel: string;
+    amountLabel: string;
+    estimatedAmountLabel: string;
+    variableAmountLabel: string;
+    dueDayLabel: string;
+    activeLabel: string;
+    addButton: string;
+    markAsPaid: string;
+    paidThisMonth: string;
+    /** Placeholder: {day} */
+    dueDayBadge: string;
+    deleteTitle: string;
+    /** Placeholder: {name} */
+    deleteBody: string;
   };
   addCategory: {
     newCategory: string;

@@ -1,4 +1,4 @@
-import type { Transaction } from "@/lib/types";
+import type { RecurringBill, Transaction } from "@/lib/types";
 
 export type WidgetKey =
   | "end_of_month_projection"
@@ -95,12 +95,33 @@ function endOfWeek(start: Date) {
   return addDays(start, 6);
 }
 
-export function computeWidgetValues(transactions: Transaction[], startingBalance: number, now = new Date()) {
+function daysInMonth(year: number, monthIndex: number) {
+  return new Date(year, monthIndex + 1, 0).getDate();
+}
+
+export function monthBoundsYmd(now = new Date()) {
+  return {
+    start: ymd(new Date(now.getFullYear(), now.getMonth(), 1)),
+    end: ymd(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+  };
+}
+
+/** This month's occurrence of a recurring bill's due day, clamped to the month's last day. */
+function dueDateThisMonth(dueDayOfMonth: number, now: Date) {
+  const day = Math.min(dueDayOfMonth, daysInMonth(now.getFullYear(), now.getMonth()));
+  return ymd(new Date(now.getFullYear(), now.getMonth(), day));
+}
+
+export function computeWidgetValues(
+  transactions: Transaction[],
+  startingBalance: number,
+  recurringBills: RecurringBill[] = [],
+  now = new Date(),
+) {
   const today = ymd(now);
   const weekStart = ymd(startOfWeek(now));
   const weekEnd = ymd(endOfWeek(startOfWeek(now)));
-  const monthStart = ymd(new Date(now.getFullYear(), now.getMonth(), 1));
-  const monthEnd = ymd(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+  const { start: monthStart, end: monthEnd } = monthBoundsYmd(now);
   const next7End = ymd(addDays(now, 6));
 
   let currentBalance = startingBalance;
@@ -138,6 +159,20 @@ export function computeWidgetValues(transactions: Transaction[], startingBalance
         if (amount > biggestIncomeThisMonth) biggestIncomeThisMonth = amount;
       }
     }
+  }
+
+  const paidRecurringBillIds = new Set(
+    transactions
+      .filter((t) => t.recurring_bill_id && t.date >= monthStart && t.date <= monthEnd)
+      .map((t) => t.recurring_bill_id),
+  );
+
+  for (const bill of recurringBills) {
+    if (!bill.is_active || paidRecurringBillIds.has(bill.id)) continue;
+    const amount = bill.is_variable ? bill.estimated_amount ?? 0 : bill.amount ?? 0;
+    billsToPay += amount;
+    const dueDate = dueDateThisMonth(bill.due_day_of_month, now);
+    if (dueDate >= today && dueDate <= next7End) billsNext7Days += amount;
   }
 
   return {

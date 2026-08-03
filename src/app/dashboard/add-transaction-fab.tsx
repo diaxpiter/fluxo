@@ -5,6 +5,7 @@ import { addTransaction } from "@/app/dashboard/actions";
 import { AddCategoryInline } from "@/app/dashboard/add-category-inline";
 import { fieldClass, btnPositiveClass, btnDestructiveClass } from "@/lib/ui";
 import type { Dictionary } from "@/lib/i18n/dictionary";
+import { categoryDisplayName } from "@/lib/dashboard-data";
 import type { Category } from "@/lib/types";
 
 export function AddTransactionFab({
@@ -13,12 +14,14 @@ export function AddTransactionFab({
   t,
   addCategoryT,
   common,
+  categoryLabels,
 }: {
   accountId: string;
   categories: Category[];
   t: Dictionary["addTransaction"];
   addCategoryT: Dictionary["addCategory"];
   common: Dictionary["common"];
+  categoryLabels: Dictionary["categories"];
 }) {
   const [open, setOpen] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
@@ -93,7 +96,7 @@ export function AddTransactionFab({
                   <option value="">{common.uncategorized}</option>
                   {categories.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.name}
+                      {categoryDisplayName(c, categoryLabels)}
                     </option>
                   ))}
                 </select>

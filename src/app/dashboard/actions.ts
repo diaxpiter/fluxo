@@ -194,6 +194,94 @@ export async function importTransactions(formData: FormData): Promise<ImportResu
   };
 }
 
+function recurringBillFields(formData: FormData) {
+  const isVariable = formData.get("isVariable") === "on";
+  const amountValue = Math.abs(Number(formData.get("amount")));
+  const categoryId = formData.get("categoryId");
+
+  return {
+    name: (formData.get("name") as string)?.trim(),
+    is_variable: isVariable,
+    amount: isVariable ? null : amountValue,
+    estimated_amount: isVariable ? amountValue : null,
+    due_day_of_month: Number(formData.get("dueDayOfMonth")),
+    account_id: formData.get("accountId"),
+    category_id: categoryId ? categoryId : null,
+    is_active: formData.get("isActive") === "on",
+  };
+}
+
+export async function addRecurringBill(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  await supabase.from("recurring_bills").insert({
+    user_id: user.id,
+    ...recurringBillFields(formData),
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/settings");
+}
+
+export async function updateRecurringBill(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  await supabase
+    .from("recurring_bills")
+    .update(recurringBillFields(formData))
+    .eq("id", formData.get("id"))
+    .eq("user_id", user.id);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/settings");
+}
+
+export async function deleteRecurringBill(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  await supabase.from("recurring_bills").delete().eq("id", formData.get("id")).eq("user_id", user.id);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/settings");
+}
+
+export async function payRecurringBill(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const categoryId = formData.get("categoryId");
+  const magnitude = Math.abs(Number(formData.get("amount")));
+
+  await supabase.from("transactions").insert({
+    user_id: user.id,
+    account_id: formData.get("accountId"),
+    category_id: categoryId ? categoryId : null,
+    date: formData.get("date"),
+    description: formData.get("description"),
+    amount: -magnitude,
+    recurring_bill_id: formData.get("billId"),
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/history");
+  revalidatePath("/dashboard/settings");
+}
+
 export async function addCategory(formData: FormData) {
   const supabase = await createClient();
   const {

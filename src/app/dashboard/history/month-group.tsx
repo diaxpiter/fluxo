@@ -19,6 +19,7 @@ export function MonthGroup({
   locale,
   t,
   common,
+  categoryLabels,
   defaultOpen = false,
 }: {
   label: string;
@@ -31,6 +32,7 @@ export function MonthGroup({
   locale: string;
   t: Dictionary["transactionList"];
   common: Dictionary["common"];
+  categoryLabels: Dictionary["categories"];
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -52,7 +54,15 @@ export function MonthGroup({
 
       {open && (
         <div className="animate-fade-in-up">
-          <TransactionList rows={rows} categories={categories} currency={currency} locale={locale} t={t} common={common} />
+          <TransactionList
+            rows={rows}
+            categories={categories}
+            currency={currency}
+            locale={locale}
+            t={t}
+            common={common}
+            categoryLabels={categoryLabels}
+          />
         </div>
       )}
     </div>
