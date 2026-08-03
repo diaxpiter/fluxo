@@ -4,11 +4,16 @@ import { AddTransactionFab } from "@/app/dashboard/add-transaction-fab";
 import { ImportTransactions } from "@/app/dashboard/import-transactions";
 import { TransactionList } from "@/app/dashboard/transaction-list";
 import { MonthGroup } from "@/app/dashboard/history/month-group";
+import { AccountSwitcher } from "@/app/dashboard/history/account-switcher";
 import { cardClass } from "@/lib/ui";
 import { getDashboardContext, getLedgerRows, groupByMonth } from "@/lib/dashboard-data";
 import { getDictionary, getLocale } from "@/lib/i18n/dictionary";
 
-export default async function HistoryPage() {
+export default async function HistoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ account?: string }>;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -21,15 +26,21 @@ export default async function HistoryPage() {
   const locale = await getLocale();
   const t = getDictionary(locale);
 
-  const { account, categories, currency } = await getDashboardContext(supabase, user.id);
+  const { accounts, categories, currency } = await getDashboardContext(supabase, user.id);
+  const { account: requestedAccountId } = await searchParams;
+  const account = accounts.find((a) => a.id === requestedAccountId) ?? accounts[0] ?? null;
+
   const rows = await getLedgerRows(supabase, account?.id ?? null, account?.starting_balance ?? 0);
   const months = groupByMonth(rows, locale);
 
   return (
     <main className="flex flex-1 flex-col px-4 pb-24 pt-8 sm:py-12">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-        <div className="flex items-center justify-between gap-3">
-          <h1 className="text-xl font-semibold tracking-tight">{t.history.title}</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-xl font-semibold tracking-tight">{t.history.title}</h1>
+            {account && <AccountSwitcher accounts={accounts} selectedId={account.id} t={t.common} />}
+          </div>
           {account && (
             <ImportTransactions accountId={account.id} currency={currency} locale={locale} t={t.importTransactions} />
           )}

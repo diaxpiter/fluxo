@@ -20,14 +20,14 @@ import {
   numericClass,
 } from "@/lib/ui";
 import type { Dictionary } from "@/lib/i18n/dictionary";
-import { categoryDisplayName } from "@/lib/dashboard-data";
-import type { Category, IncomeScheduleType, IncomeSource } from "@/lib/types";
+import { accountDisplayName, categoryDisplayName } from "@/lib/dashboard-data";
+import type { Account, Category, IncomeScheduleType, IncomeSource } from "@/lib/types";
 
 export function IncomeSourcesManager({
   sources,
   receivedSourceIds,
   categories,
-  accountId,
+  accounts,
   currency,
   locale,
   t,
@@ -35,7 +35,7 @@ export function IncomeSourcesManager({
   sources: IncomeSource[];
   receivedSourceIds: string[];
   categories: Category[];
-  accountId: string;
+  accounts: Account[];
   currency: string;
   locale: string;
   t: Dictionary;
@@ -61,7 +61,7 @@ export function IncomeSourcesManager({
               received={source.schedule_type === "fixed_monthly_date" && receivedSet.has(source.id)}
               categoryName={categoryName(source.category_id)}
               categories={categories}
-              accountId={accountId}
+              accounts={accounts}
               currency={currency}
               locale={locale}
               t={t}
@@ -71,7 +71,7 @@ export function IncomeSourcesManager({
       )}
 
       {adding ? (
-        <SourceForm categories={categories} accountId={accountId} t={t} onDone={() => setAdding(false)} />
+        <SourceForm categories={categories} accounts={accounts} t={t} onDone={() => setAdding(false)} />
       ) : (
         <button type="button" onClick={() => setAdding(true)} className={`${linkClass} self-start text-xs`}>
           {t.incomeSources.addButton}
@@ -86,7 +86,7 @@ function SourceRow({
   received,
   categoryName,
   categories,
-  accountId,
+  accounts,
   currency,
   locale,
   t,
@@ -95,7 +95,7 @@ function SourceRow({
   received: boolean;
   categoryName: string;
   categories: Category[];
-  accountId: string;
+  accounts: Account[];
   currency: string;
   locale: string;
   t: Dictionary;
@@ -108,7 +108,7 @@ function SourceRow({
         <SourceForm
           source={source}
           categories={categories}
-          accountId={accountId}
+          accounts={accounts}
           t={t}
           onDone={() => setEditing(false)}
         />
@@ -120,13 +120,15 @@ function SourceRow({
     source.schedule_type === "fixed_monthly_date"
       ? format(t.incomeSources.dayBadge, { day: source.day_of_month ?? 1 })
       : t.incomeSources.irregularBadge;
+  const account = accounts.find((a) => a.id === source.account_id);
+  const accountName = account ? accountDisplayName(account, t.common.mainAccount) : "";
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-foreground/5 p-4 last:border-0">
       <div className="min-w-0">
         <p className="truncate text-sm font-medium">{source.name}</p>
         <p className="mt-0.5 truncate text-xs text-foreground/50">
-          {scheduleBadge} · {categoryName}
+          {scheduleBadge} · {categoryName} · {accountName}
         </p>
       </div>
 
@@ -142,7 +144,7 @@ function SourceRow({
           <input type="hidden" name="dayOfMonth" value={source.day_of_month ?? 1} />
           <input type="hidden" name="weekendShift" value={source.weekend_holiday_rule} />
           <input type="hidden" name="expectedAmount" value={source.expected_amount ?? ""} />
-          <input type="hidden" name="accountId" value={accountId} />
+          <input type="hidden" name="accountId" value={source.account_id} />
           <input type="hidden" name="categoryId" value={source.category_id ?? ""} />
           <label className="flex items-center gap-1.5 text-xs text-foreground/50">
             <input
@@ -159,7 +161,7 @@ function SourceRow({
           {received ? (
             <span className="text-emerald-500">{t.incomeSources.receivedThisMonth}</span>
           ) : (
-            <ReceiveButton source={source} accountId={accountId} t={t} />
+            <ReceiveButton source={source} t={t} />
           )}
           <button type="button" onClick={() => setEditing(true)} className={linkClass}>
             {t.common.edit}
@@ -171,7 +173,7 @@ function SourceRow({
   );
 }
 
-function ReceiveButton({ source, accountId, t }: { source: IncomeSource; accountId: string; t: Dictionary }) {
+function ReceiveButton({ source, t }: { source: IncomeSource; t: Dictionary }) {
   const [open, setOpen] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const [isPending, startTransition] = useTransition();
@@ -215,7 +217,7 @@ function ReceiveButton({ source, accountId, t }: { source: IncomeSource; account
               className="flex flex-col gap-4"
             >
               <input type="hidden" name="sourceId" value={source.id} />
-              <input type="hidden" name="accountId" value={accountId} />
+              <input type="hidden" name="accountId" value={source.account_id} />
               <input type="hidden" name="categoryId" value={source.category_id ?? ""} />
 
               <div className="flex flex-col gap-1.5">
@@ -295,13 +297,13 @@ function DeleteSourceButton({ source, t }: { source: IncomeSource; t: Dictionary
 function SourceForm({
   source,
   categories,
-  accountId,
+  accounts,
   t,
   onDone,
 }: {
   source?: IncomeSource;
   categories: Category[];
-  accountId: string;
+  accounts: Account[];
   t: Dictionary;
   onDone: () => void;
 }) {
@@ -317,7 +319,6 @@ function SourceForm({
       className={`${cardClass} flex flex-col gap-3 p-4`}
     >
       {source && <input type="hidden" name="id" value={source.id} />}
-      <input type="hidden" name="accountId" value={accountId} />
 
       <div className="flex flex-col gap-1.5">
         <label className="text-xs text-foreground/50">{t.incomeSources.nameLabel}</label>
@@ -376,6 +377,17 @@ function SourceForm({
             defaultValue={source?.expected_amount ?? undefined}
             className={`${fieldClass} w-28`}
           />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs text-foreground/50">{t.common.account}</label>
+          <select name="accountId" defaultValue={source?.account_id ?? accounts[0]?.id} className={fieldClass}>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {accountDisplayName(a, t.common.mainAccount)}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="flex flex-col gap-1.5">

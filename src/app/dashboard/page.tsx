@@ -1,11 +1,17 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { TransactionList } from "@/app/dashboard/transaction-list";
+import { RecentActivityList } from "@/app/dashboard/recent-activity-list";
 import { WidgetCard } from "@/app/dashboard/widget-card";
+import { TransferButton } from "@/app/dashboard/transfer-button";
 import { formatCurrency } from "@/lib/currency";
 import { cardClass, linkClass, numericClass } from "@/lib/ui";
-import { accountDisplayName, getDashboardContext, getLedgerRows } from "@/lib/dashboard-data";
+import {
+  accountDisplayName,
+  computeAccountBalances,
+  getDashboardContext,
+  getTransactionsForAccounts,
+} from "@/lib/dashboard-data";
 import { getDictionary, getLocale } from "@/lib/i18n/dictionary";
 import { format } from "@/lib/i18n/format";
 import { computeWidgetValues, layoutRows, todayYmd, type WidgetKey } from "@/lib/widgets";
@@ -45,14 +51,32 @@ export default async function DashboardPage() {
   const displayName = (user.user_metadata?.display_name as string) || user.email;
   const firstName = displayName?.split(" ")[0];
 
-  const { account, categories, currency, widgetPrefs, recurringBills, incomeSources } = await getDashboardContext(
+  const { accounts, categories, currency, widgetPrefs, recurringBills, incomeSources } = await getDashboardContext(
     supabase,
     user.id,
   );
-  const rows = await getLedgerRows(supabase, account?.id ?? null, account?.starting_balance ?? 0);
+  const transactions = await getTransactionsForAccounts(supabase, accounts.map((a) => a.id));
+  const balances = computeAccountBalances(accounts, transactions);
+
+  const visibleAccounts = accounts.filter((a) => a.include_in_overview);
+  const includedAccountIds = new Set(visibleAccounts.map((a) => a.id));
+  const includedTransactions = transactions.filter((tx) => includedAccountIds.has(tx.account_id));
+  const includedRecurringBills = recurringBills.filter((b) => includedAccountIds.has(b.account_id));
+  const includedIncomeSources = incomeSources.filter((s) => includedAccountIds.has(s.account_id));
+  const includedStartingBalance = visibleAccounts.reduce((sum, a) => sum + a.starting_balance, 0);
+
+  const widgetValues = computeWidgetValues(
+    includedTransactions,
+    includedStartingBalance,
+    includedRecurringBills,
+    includedIncomeSources,
+  );
+
   const today = todayYmd();
-  const recentRows = rows.filter((r) => r.date <= today).slice(-RECENT_COUNT);
-  const widgetValues = computeWidgetValues(rows, account?.starting_balance ?? 0, recurringBills, incomeSources);
+  const recentRows = transactions
+    .filter((tx) => tx.date <= today)
+    .slice(-RECENT_COUNT)
+    .reverse();
 
   return (
     <main className="flex flex-1 flex-col px-4 pb-24 pt-8 sm:py-12">
@@ -67,19 +91,34 @@ export default async function DashboardPage() {
           <p className="mt-0.5 truncate text-sm text-foreground/50">{user.email}</p>
         </div>
 
-        {!account ? (
+        {accounts.length === 0 ? (
           <div className={`${cardClass} p-6 text-sm text-foreground/50`}>{t.common.settingUpAccount}</div>
         ) : (
           <>
-            <div className={`${cardClass} p-5 sm:p-6`}>
-              <p className="text-sm text-foreground/50">{accountDisplayName(account, t.common.mainAccount)}</p>
-              <p
-                className={`mt-1 text-2xl font-semibold tracking-tight sm:text-3xl ${numericClass} ${
-                  widgetValues.currentBalance < 0 ? "text-red-400" : "text-foreground"
-                }`}
-              >
-                {formatCurrency(widgetValues.currentBalance, currency, locale)}
-              </p>
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-medium text-foreground/50">{t.accounts.heading}</h2>
+                <TransferButton accounts={accounts} t={t} />
+              </div>
+              {visibleAccounts.length === 0 ? (
+                <p className="text-sm text-foreground/50">{t.accounts.empty}</p>
+              ) : (
+                <div className={cardClass}>
+                  {visibleAccounts.map((account) => (
+                    <div
+                      key={account.id}
+                      className="flex items-center justify-between gap-3 border-b border-foreground/5 p-4 last:border-0"
+                    >
+                      <p className="truncate text-sm text-foreground/70">
+                        {accountDisplayName(account, t.common.mainAccount)}
+                      </p>
+                      <p className={`text-sm font-medium ${numericClass}`}>
+                        {formatCurrency(balances.get(account.id) ?? account.starting_balance, currency, locale)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="flex flex-col gap-3">
@@ -108,8 +147,9 @@ export default async function DashboardPage() {
                   {t.home.viewAll}
                 </Link>
               </div>
-              <TransactionList
+              <RecentActivityList
                 rows={recentRows}
+                accounts={accounts}
                 categories={categories}
                 currency={currency}
                 locale={locale}

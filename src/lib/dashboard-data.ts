@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { monthBoundsYmd, normalizeWidgetPrefs, type WidgetPref } from "@/lib/widgets";
+import { monthBoundsYmd, normalizeWidgetPrefs, todayYmd, type WidgetPref } from "@/lib/widgets";
 import type { Dictionary } from "@/lib/i18n/dictionary";
 import type { Account, Category, IncomeSource, RecurringBill, Transaction } from "@/lib/types";
 
@@ -35,7 +35,7 @@ export async function getDashboardContext(supabase: SupabaseClient, userId: stri
       .order("created_at", { ascending: true }),
   ]);
 
-  const account = (accounts as Account[] | null)?.[0] ?? null;
+  const accountList = (accounts as Account[] | null) ?? [];
   const currency = profile?.currency ?? "EUR";
   const categoryList = (categories as Category[] | null) ?? [];
   const widgetPrefs = normalizeWidgetPrefs(profile?.widgets as WidgetPref[] | null);
@@ -43,7 +43,7 @@ export async function getDashboardContext(supabase: SupabaseClient, userId: stri
   const incomeSourceList = (incomeSources as IncomeSource[] | null) ?? [];
 
   return {
-    account,
+    accounts: accountList,
     categories: categoryList,
     currency,
     widgetPrefs,
@@ -78,16 +78,12 @@ export function categoryDisplayName(category: Category, categoryLabels: Dictiona
 /** Ids of recurring bills already paid (linked to a real transaction) this month. */
 export async function getPaidRecurringBillIds(
   supabase: SupabaseClient,
-  accountId: string | null,
   now = new Date(),
 ): Promise<string[]> {
-  if (!accountId) return [];
-
   const { start, end } = monthBoundsYmd(now);
   const { data } = await supabase
     .from("transactions")
     .select("recurring_bill_id")
-    .eq("account_id", accountId)
     .not("recurring_bill_id", "is", null)
     .gte("date", start)
     .lte("date", end);
@@ -96,18 +92,11 @@ export async function getPaidRecurringBillIds(
 }
 
 /** Ids of income sources already received (linked to a real transaction) this month. */
-export async function getReceivedIncomeSourceIds(
-  supabase: SupabaseClient,
-  accountId: string | null,
-  now = new Date(),
-): Promise<string[]> {
-  if (!accountId) return [];
-
+export async function getReceivedIncomeSourceIds(supabase: SupabaseClient, now = new Date()): Promise<string[]> {
   const { start, end } = monthBoundsYmd(now);
   const { data } = await supabase
     .from("transactions")
     .select("income_source_id")
-    .eq("account_id", accountId)
     .not("income_source_id", "is", null)
     .gte("date", start)
     .lte("date", end);
@@ -138,6 +127,41 @@ export async function getLedgerRows(
     acc.push({ ...t, balance: previousBalance + Number(t.amount) });
     return acc;
   }, []);
+}
+
+/** Like getLedgerRows but across multiple accounts, without a running balance (meaningless mixed across accounts). */
+export async function getTransactionsForAccounts(
+  supabase: SupabaseClient,
+  accountIds: string[],
+): Promise<Transaction[]> {
+  if (accountIds.length === 0) return [];
+
+  const { data } = await supabase
+    .from("transactions")
+    .select("*")
+    .in("account_id", accountIds)
+    .order("date", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  return (data as Transaction[] | null) ?? [];
+}
+
+/** Each account's starting balance plus the sum of its own past transactions. */
+export function computeAccountBalances(
+  accounts: Account[],
+  transactions: Transaction[],
+  now = new Date(),
+): Map<string, number> {
+  const today = todayYmd(now);
+  const balances = new Map(accounts.map((a) => [a.id, a.starting_balance]));
+
+  for (const t of transactions) {
+    if (t.date <= today) {
+      balances.set(t.account_id, (balances.get(t.account_id) ?? 0) + Number(t.amount));
+    }
+  }
+
+  return balances;
 }
 
 export type MonthGroupData = {

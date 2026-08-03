@@ -6,7 +6,10 @@ import { createClient } from "@/lib/supabase/server";
 import type { WidgetKey, WidgetPref } from "@/lib/widgets";
 import { parseWorkbook, type MonthCheck } from "@/lib/import-excel";
 import { getDictionary, getLocale } from "@/lib/i18n/dictionary";
+import { format } from "@/lib/i18n/format";
 import { LOCALE_COOKIE, isLocale } from "@/lib/i18n/locales";
+import { accountDisplayName } from "@/lib/dashboard-data";
+import type { Account } from "@/lib/types";
 
 function signedAmount(formData: FormData) {
   const magnitude = Math.abs(Number(formData.get("amount")));
@@ -67,11 +70,24 @@ export async function deleteTransaction(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) return;
 
-  await supabase
+  const id = formData.get("id");
+  const { data: transaction } = await supabase
     .from("transactions")
-    .delete()
-    .eq("id", formData.get("id"))
-    .eq("user_id", user.id);
+    .select("transfer_group_id")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .single();
+
+  if (transaction?.transfer_group_id) {
+    // Delete both legs of the transfer together so the ledgers never go out of sync.
+    await supabase
+      .from("transactions")
+      .delete()
+      .eq("transfer_group_id", transaction.transfer_group_id)
+      .eq("user_id", user.id);
+  } else {
+    await supabase.from("transactions").delete().eq("id", id).eq("user_id", user.id);
+  }
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/history");
@@ -368,6 +384,127 @@ export async function receiveIncomeSource(formData: FormData) {
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/history");
   revalidatePath("/dashboard/settings");
+}
+
+function accountFields(formData: FormData) {
+  return {
+    name: (formData.get("name") as string)?.trim(),
+    type: (formData.get("type") as string) || "checking",
+    include_in_overview: formData.get("includeInOverview") === "on",
+  };
+}
+
+export async function addAccount(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  await supabase.from("accounts").insert({
+    user_id: user.id,
+    starting_balance: Number(formData.get("startingBalance")) || 0,
+    ...accountFields(formData),
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/history");
+  revalidatePath("/dashboard/settings");
+}
+
+export async function updateAccount(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  await supabase
+    .from("accounts")
+    .update(accountFields(formData))
+    .eq("id", formData.get("id"))
+    .eq("user_id", user.id);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/history");
+  revalidatePath("/dashboard/settings");
+}
+
+export async function archiveAccount(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  await supabase.from("accounts").update({ is_archived: true }).eq("id", formData.get("id")).eq("user_id", user.id);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/history");
+  revalidatePath("/dashboard/settings");
+}
+
+export type TransferResult = { ok: true } | { ok: false; error: string };
+
+export async function transferBetweenAccounts(formData: FormData): Promise<TransferResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  const t = getDictionary(await getLocale());
+
+  const fromAccountId = formData.get("fromAccountId") as string;
+  const toAccountId = formData.get("toAccountId") as string;
+  if (!fromAccountId || !toAccountId || fromAccountId === toAccountId) {
+    return { ok: false, error: t.transfer.sameAccountError };
+  }
+
+  const { data: accounts } = await supabase
+    .from("accounts")
+    .select("*")
+    .in("id", [fromAccountId, toAccountId])
+    .eq("user_id", user.id);
+
+  const fromAccount = (accounts as Account[] | null)?.find((a) => a.id === fromAccountId);
+  const toAccount = (accounts as Account[] | null)?.find((a) => a.id === toAccountId);
+  if (!fromAccount || !toAccount) return { ok: false, error: t.transfer.sameAccountError };
+
+  const magnitude = Math.abs(Number(formData.get("amount")));
+  const date = formData.get("date");
+  const description = (formData.get("description") as string)?.trim();
+  const transferGroupId = crypto.randomUUID();
+  const fromName = accountDisplayName(fromAccount, t.common.mainAccount);
+  const toName = accountDisplayName(toAccount, t.common.mainAccount);
+
+  const { error } = await supabase.from("transactions").insert([
+    {
+      user_id: user.id,
+      account_id: fromAccountId,
+      category_id: null,
+      date,
+      description: description || format(t.transfer.toDescription, { name: toName }),
+      amount: -magnitude,
+      transfer_group_id: transferGroupId,
+    },
+    {
+      user_id: user.id,
+      account_id: toAccountId,
+      category_id: null,
+      date,
+      description: description || format(t.transfer.fromDescription, { name: fromName }),
+      amount: magnitude,
+      transfer_group_id: transferGroupId,
+    },
+  ]);
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/history");
+
+  return { ok: true };
 }
 
 export async function addCategory(formData: FormData) {

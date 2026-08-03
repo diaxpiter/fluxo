@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import type { WidgetKey } from "@/lib/widgets";
+import type { AccountType } from "@/lib/types";
 import { DEFAULT_LOCALE, LOCALE_COOKIE, isLocale, type Locale } from "@/lib/i18n/locales";
 import { en_US } from "@/lib/i18n/dictionaries/en-US";
 import { pt_BR } from "@/lib/i18n/dictionaries/pt-BR";
@@ -19,6 +20,7 @@ export type Dictionary = {
     uncategorized: string;
     settingUpAccount: string;
     mainAccount: string;
+    account: string;
   };
   /** Labels for the literal English category names the signup trigger seeds every account with. */
   categories: {
@@ -43,10 +45,37 @@ export type Dictionary = {
   settings: {
     title: string;
     widgetsHeading: string;
-    accountHeading: string;
     languageHeading: string;
     sessionHeading: string;
     logOut: string;
+  };
+  accountTypes: Record<AccountType, string>;
+  accounts: {
+    heading: string;
+    empty: string;
+    nameLabel: string;
+    typeLabel: string;
+    startingBalanceLabel: string;
+    includeInOverviewLabel: string;
+    addButton: string;
+    archiveButton: string;
+    archiveTitle: string;
+    /** Placeholder: {name} */
+    archiveBody: string;
+  };
+  transfer: {
+    heading: string;
+    fromLabel: string;
+    toLabel: string;
+    amountLabel: string;
+    dateLabel: string;
+    descriptionLabel: string;
+    submitButton: string;
+    sameAccountError: string;
+    /** Placeholder: {name} */
+    toDescription: string;
+    /** Placeholder: {name} */
+    fromDescription: string;
   };
   widgets: Record<WidgetKey, string>;
   widgetCustomizer: {

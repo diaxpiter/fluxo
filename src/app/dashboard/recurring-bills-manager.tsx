@@ -19,14 +19,14 @@ import {
   numericClass,
 } from "@/lib/ui";
 import type { Dictionary } from "@/lib/i18n/dictionary";
-import { categoryDisplayName } from "@/lib/dashboard-data";
-import type { Category, RecurringBill } from "@/lib/types";
+import { accountDisplayName, categoryDisplayName } from "@/lib/dashboard-data";
+import type { Account, Category, RecurringBill } from "@/lib/types";
 
 export function RecurringBillsManager({
   bills,
   paidBillIds,
   categories,
-  accountId,
+  accounts,
   currency,
   locale,
   t,
@@ -34,7 +34,7 @@ export function RecurringBillsManager({
   bills: RecurringBill[];
   paidBillIds: string[];
   categories: Category[];
-  accountId: string;
+  accounts: Account[];
   currency: string;
   locale: string;
   t: Dictionary;
@@ -60,7 +60,7 @@ export function RecurringBillsManager({
               paid={paidSet.has(bill.id)}
               categoryName={categoryName(bill.category_id)}
               categories={categories}
-              accountId={accountId}
+              accounts={accounts}
               currency={currency}
               locale={locale}
               t={t}
@@ -70,7 +70,7 @@ export function RecurringBillsManager({
       )}
 
       {adding ? (
-        <BillForm categories={categories} accountId={accountId} t={t} onDone={() => setAdding(false)} />
+        <BillForm categories={categories} accounts={accounts} t={t} onDone={() => setAdding(false)} />
       ) : (
         <button type="button" onClick={() => setAdding(true)} className={`${linkClass} self-start text-xs`}>
           {t.recurringBills.addButton}
@@ -85,7 +85,7 @@ function BillRow({
   paid,
   categoryName,
   categories,
-  accountId,
+  accounts,
   currency,
   locale,
   t,
@@ -94,7 +94,7 @@ function BillRow({
   paid: boolean;
   categoryName: string;
   categories: Category[];
-  accountId: string;
+  accounts: Account[];
   currency: string;
   locale: string;
   t: Dictionary;
@@ -104,19 +104,21 @@ function BillRow({
   if (editing) {
     return (
       <div className="border-b border-foreground/5 bg-foreground/[0.03] p-4 last:border-0">
-        <BillForm bill={bill} categories={categories} accountId={accountId} t={t} onDone={() => setEditing(false)} />
+        <BillForm bill={bill} categories={categories} accounts={accounts} t={t} onDone={() => setEditing(false)} />
       </div>
     );
   }
 
   const amount = bill.is_variable ? bill.estimated_amount ?? 0 : bill.amount ?? 0;
+  const account = accounts.find((a) => a.id === bill.account_id);
+  const accountName = account ? accountDisplayName(account, t.common.mainAccount) : "";
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-foreground/5 p-4 last:border-0">
       <div className="min-w-0">
         <p className="truncate text-sm font-medium">{bill.name}</p>
         <p className="mt-0.5 truncate text-xs text-foreground/50">
-          {format(t.recurringBills.dueDayBadge, { day: bill.due_day_of_month })} · {categoryName}
+          {format(t.recurringBills.dueDayBadge, { day: bill.due_day_of_month })} · {categoryName} · {accountName}
         </p>
       </div>
 
@@ -132,7 +134,7 @@ function BillRow({
           <input type="hidden" name="isVariable" value={bill.is_variable ? "on" : ""} />
           <input type="hidden" name="amount" value={amount} />
           <input type="hidden" name="dueDayOfMonth" value={bill.due_day_of_month} />
-          <input type="hidden" name="accountId" value={accountId} />
+          <input type="hidden" name="accountId" value={bill.account_id} />
           <input type="hidden" name="categoryId" value={bill.category_id ?? ""} />
           <label className="flex items-center gap-1.5 text-xs text-foreground/50">
             <input
@@ -149,7 +151,7 @@ function BillRow({
           {paid ? (
             <span className="text-emerald-500">{t.recurringBills.paidThisMonth}</span>
           ) : (
-            <PayButton bill={bill} accountId={accountId} t={t} />
+            <PayButton bill={bill} t={t} />
           )}
           <button type="button" onClick={() => setEditing(true)} className={linkClass}>
             {t.common.edit}
@@ -161,7 +163,7 @@ function BillRow({
   );
 }
 
-function PayButton({ bill, accountId, t }: { bill: RecurringBill; accountId: string; t: Dictionary }) {
+function PayButton({ bill, t }: { bill: RecurringBill; t: Dictionary }) {
   const [open, setOpen] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const [isPending, startTransition] = useTransition();
@@ -206,7 +208,7 @@ function PayButton({ bill, accountId, t }: { bill: RecurringBill; accountId: str
               className="flex flex-col gap-4"
             >
               <input type="hidden" name="billId" value={bill.id} />
-              <input type="hidden" name="accountId" value={accountId} />
+              <input type="hidden" name="accountId" value={bill.account_id} />
               <input type="hidden" name="categoryId" value={bill.category_id ?? ""} />
 
               <div className="flex flex-col gap-1.5">
@@ -286,13 +288,13 @@ function DeleteBillButton({ bill, t }: { bill: RecurringBill; t: Dictionary }) {
 function BillForm({
   bill,
   categories,
-  accountId,
+  accounts,
   t,
   onDone,
 }: {
   bill?: RecurringBill;
   categories: Category[];
-  accountId: string;
+  accounts: Account[];
   t: Dictionary;
   onDone: () => void;
 }) {
@@ -308,7 +310,6 @@ function BillForm({
       className={`${cardClass} flex flex-col gap-3 p-4`}
     >
       {bill && <input type="hidden" name="id" value={bill.id} />}
-      <input type="hidden" name="accountId" value={accountId} />
 
       <div className="flex flex-col gap-1.5">
         <label className="text-xs text-foreground/50">{t.recurringBills.nameLabel}</label>
@@ -357,6 +358,17 @@ function BillForm({
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs text-foreground/50">{t.common.account}</label>
+          <select name="accountId" defaultValue={bill?.account_id ?? accounts[0]?.id} className={fieldClass}>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {accountDisplayName(a, t.common.mainAccount)}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div className="flex flex-col gap-1.5">
           <label className="text-xs text-foreground/50">{t.addTransaction.categoryLabel}</label>
           <select name="categoryId" defaultValue={bill?.category_id ?? ""} className={fieldClass}>

@@ -1,10 +1,21 @@
+export type AccountType =
+  | "checking"
+  | "savings"
+  | "sinking_fund"
+  | "emergency"
+  | "investment"
+  | "shared"
+  | "cash"
+  | "other";
+
 export type Account = {
   id: string;
   user_id: string;
   name: string;
-  type: string;
+  type: AccountType;
   starting_balance: number;
   is_archived: boolean;
+  include_in_overview: boolean;
   created_at: string;
 };
 
@@ -27,6 +38,7 @@ export type Transaction = {
   is_projected: boolean;
   recurring_bill_id: string | null;
   income_source_id: string | null;
+  transfer_group_id: string | null;
   created_at: string;
 };
 

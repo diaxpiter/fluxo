@@ -166,6 +166,7 @@ export function computeWidgetValues(
 
     if (isPast) currentBalance += amount;
     if (date <= monthEnd) endOfMonthProjection += amount;
+    if (t.transfer_group_id) continue; // moves money between the user's own accounts — not real spend/income
 
     if (amount < 0) {
       const spent = -amount;
