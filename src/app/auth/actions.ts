@@ -1,7 +1,9 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { LOCALE_COOKIE, isLocale } from "@/lib/i18n/locales";
 
 export async function login(formData: FormData) {
   const supabase = await createClient();
@@ -41,6 +43,12 @@ export async function signup(formData: FormData) {
     redirect("/signup?message=check-email");
   }
 
+  const cookieStore = await cookies();
+  const language = cookieStore.get(LOCALE_COOKIE)?.value;
+  if (isLocale(language) && data.user) {
+    await supabase.from("profiles").update({ language }).eq("id", data.user.id);
+  }
+
   redirect("/dashboard");
 }
 
@@ -48,4 +56,16 @@ export async function logout() {
   const supabase = await createClient();
   await supabase.auth.signOut();
   redirect("/login");
+}
+
+export async function setLocaleCookie(formData: FormData) {
+  const language = formData.get("language") as string | null;
+  const redirectTo = (formData.get("redirectTo") as string | null) ?? "/login";
+
+  if (isLocale(language)) {
+    const cookieStore = await cookies();
+    cookieStore.set(LOCALE_COOKIE, language, { path: "/", maxAge: 60 * 60 * 24 * 365 });
+  }
+
+  redirect(redirectTo);
 }

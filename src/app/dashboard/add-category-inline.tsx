@@ -3,15 +3,22 @@
 import { useRef, useState } from "react";
 import { addCategory } from "@/app/dashboard/actions";
 import { fieldClass, linkClass } from "@/lib/ui";
+import type { Dictionary } from "@/lib/i18n/dictionary";
 
-export function AddCategoryInline() {
+export function AddCategoryInline({
+  t,
+  common,
+}: {
+  t: Dictionary["addCategory"];
+  common: Dictionary["common"];
+}) {
   const [open, setOpen] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)} className={`${linkClass} mt-1 self-start text-xs`}>
-        + New category
+        {t.newCategory}
       </button>
     );
   }
@@ -31,14 +38,14 @@ export function AddCategoryInline() {
         name="name"
         autoFocus
         required
-        placeholder="Category name"
+        placeholder={t.namePlaceholder}
         className={`${fieldClass} w-full py-1 text-xs`}
       />
       <button type="submit" className={`${linkClass} shrink-0 text-xs`}>
-        Save
+        {common.save}
       </button>
       <button type="button" onClick={() => setOpen(false)} className={`${linkClass} shrink-0 text-xs`}>
-        Cancel
+        {common.cancel}
       </button>
     </form>
   );

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { login } from "@/app/auth/actions";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { cardClass, fieldClass, btnPrimaryClass } from "@/lib/ui";
+import { getDictionary, getLocale } from "@/lib/i18n/dictionary";
 
 export default async function LoginPage({
   searchParams,
@@ -8,6 +10,8 @@ export default async function LoginPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const { error } = await searchParams;
+  const locale = await getLocale();
+  const t = getDictionary(locale).auth.login;
 
   return (
     <main className="flex flex-1 items-center justify-center px-4 py-16">
@@ -16,7 +20,7 @@ export default async function LoginPage({
           <h1 className="text-2xl font-semibold tracking-tight">
             <span className="text-emerald-500">.</span>fluxo
           </h1>
-          <p className="mt-2 text-sm text-foreground/50">Log in to your account</p>
+          <p className="mt-2 text-sm text-foreground/50">{t.heading}</p>
         </div>
 
         <form action={login} className={`${cardClass} flex flex-col gap-4 p-6`}>
@@ -28,14 +32,14 @@ export default async function LoginPage({
 
           <div className="flex flex-col gap-1.5">
             <label htmlFor="email" className="text-sm font-medium text-foreground/70">
-              Email
+              {t.emailLabel}
             </label>
             <input id="email" name="email" type="email" required autoComplete="email" className={fieldClass} />
           </div>
 
           <div className="flex flex-col gap-1.5">
             <label htmlFor="password" className="text-sm font-medium text-foreground/70">
-              Password
+              {t.passwordLabel}
             </label>
             <input
               id="password"
@@ -48,16 +52,20 @@ export default async function LoginPage({
           </div>
 
           <button type="submit" className={`${btnPrimaryClass} mt-2`}>
-            Log in
+            {t.submit}
           </button>
         </form>
 
         <p className="mt-6 text-center text-sm text-foreground/50">
-          Don&apos;t have an account?{" "}
+          {t.noAccount}{" "}
           <Link href="/signup" className="font-medium text-foreground underline decoration-foreground/30 underline-offset-4 hover:decoration-foreground">
-            Sign up
+            {t.signupLink}
           </Link>
         </p>
+
+        <div className="mt-6">
+          <LanguageSwitcher current={locale} redirectTo="/login" />
+        </div>
       </div>
     </main>
   );

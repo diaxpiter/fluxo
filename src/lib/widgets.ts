@@ -6,34 +6,64 @@ export type WidgetKey =
   | "incoming_this_week"
   | "paid_this_week"
   | "spent_this_month"
-  | "biggest_expense_this_month";
+  | "biggest_expense_this_month"
+  | "income_this_month"
+  | "net_this_month"
+  | "biggest_income_this_month"
+  | "bills_next_7_days";
 
 export type WidgetPref = {
   key: WidgetKey;
-  title: string;
   visible: boolean;
-  /** Tiles sharing a tier render in the same row, splitting it evenly.
-   *  A tile alone in its tier stretches to fill the whole row. */
-  tier: number;
+  /** Stands alone in its own full-width row instead of pairing up with the next widget. */
+  wide: boolean;
 };
 
 export const DEFAULT_WIDGETS: WidgetPref[] = [
-  { key: "end_of_month_projection", title: "Predicted balance until end of month", visible: true, tier: 1 },
-  { key: "bills_to_pay", title: "Bills to be paid this month", visible: true, tier: 2 },
-  { key: "incoming_this_week", title: "Money to come this week", visible: true, tier: 2 },
-  { key: "paid_this_week", title: "Amount paid this week", visible: true, tier: 3 },
-  { key: "spent_this_month", title: "Spent this month", visible: true, tier: 3 },
-  { key: "biggest_expense_this_month", title: "Biggest expense this month", visible: true, tier: 4 },
+  { key: "end_of_month_projection", visible: true, wide: true },
+  { key: "bills_to_pay", visible: true, wide: false },
+  { key: "incoming_this_week", visible: true, wide: false },
+  { key: "paid_this_week", visible: true, wide: false },
+  { key: "spent_this_month", visible: true, wide: false },
+  { key: "biggest_expense_this_month", visible: true, wide: true },
+  { key: "income_this_month", visible: false, wide: false },
+  { key: "net_this_month", visible: false, wide: false },
+  { key: "biggest_income_this_month", visible: false, wide: false },
+  { key: "bills_next_7_days", visible: false, wide: false },
 ];
 
-export function groupByTier(widgets: WidgetPref[]) {
-  const groups = new Map<number, WidgetPref[]>();
+/** Ensures every catalog widget has an entry, appending any the user's saved prefs predate. */
+export function normalizeWidgetPrefs(saved: WidgetPref[] | null | undefined): WidgetPref[] {
+  if (!saved || saved.length === 0) return DEFAULT_WIDGETS;
+  const known = new Set(saved.map((w) => w.key));
+  const missing = DEFAULT_WIDGETS.filter((d) => !known.has(d.key));
+  return [...saved, ...missing];
+}
+
+/** Lays widgets out in display order: a "wide" widget fills its own row, others pair up two-per-row. */
+export function layoutRows(widgets: WidgetPref[]): WidgetPref[][] {
+  const rows: WidgetPref[][] = [];
+  let pair: WidgetPref[] = [];
+
+  const flushPair = () => {
+    if (pair.length) {
+      rows.push(pair);
+      pair = [];
+    }
+  };
+
   for (const w of widgets) {
-    const group = groups.get(w.tier);
-    if (group) group.push(w);
-    else groups.set(w.tier, [w]);
+    if (w.wide) {
+      flushPair();
+      rows.push([w]);
+    } else {
+      pair.push(w);
+      if (pair.length === 2) flushPair();
+    }
   }
-  return [...groups.entries()].sort(([a], [b]) => a - b).map(([, group]) => group);
+  flushPair();
+
+  return rows;
 }
 
 function pad(n: number) {
@@ -44,6 +74,16 @@ function ymd(d: Date) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+export function todayYmd(now = new Date()) {
+  return ymd(now);
+}
+
+function addDays(d: Date, days: number) {
+  const date = new Date(d);
+  date.setDate(date.getDate() + days);
+  return date;
+}
+
 function startOfWeek(d: Date) {
   const date = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   const day = date.getDay();
@@ -52,9 +92,7 @@ function startOfWeek(d: Date) {
 }
 
 function endOfWeek(start: Date) {
-  const end = new Date(start);
-  end.setDate(start.getDate() + 6);
-  return end;
+  return addDays(start, 6);
 }
 
 export function computeWidgetValues(transactions: Transaction[], startingBalance: number, now = new Date()) {
@@ -63,14 +101,18 @@ export function computeWidgetValues(transactions: Transaction[], startingBalance
   const weekEnd = ymd(endOfWeek(startOfWeek(now)));
   const monthStart = ymd(new Date(now.getFullYear(), now.getMonth(), 1));
   const monthEnd = ymd(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+  const next7End = ymd(addDays(now, 6));
 
   let currentBalance = startingBalance;
   let endOfMonthProjection = startingBalance;
   let billsToPay = 0;
+  let billsNext7Days = 0;
   let incomingThisWeek = 0;
   let paidThisWeek = 0;
   let spentThisMonth = 0;
+  let incomeThisMonth = 0;
   let biggestExpenseThisMonth = 0;
+  let biggestIncomeThisMonth = 0;
 
   for (const t of transactions) {
     const amount = Number(t.amount);
@@ -87,9 +129,14 @@ export function computeWidgetValues(transactions: Transaction[], startingBalance
         if (spent > biggestExpenseThisMonth) biggestExpenseThisMonth = spent;
       }
       if (!isPast && date <= monthEnd) billsToPay += spent;
+      if (!isPast && date >= today && date <= next7End) billsNext7Days += spent;
       if (isPast && date >= weekStart) paidThisWeek += spent;
     } else if (amount > 0) {
       if (date >= today && date <= weekEnd) incomingThisWeek += amount;
+      if (isPast && date >= monthStart) {
+        incomeThisMonth += amount;
+        if (amount > biggestIncomeThisMonth) biggestIncomeThisMonth = amount;
+      }
     }
   }
 
@@ -97,9 +144,13 @@ export function computeWidgetValues(transactions: Transaction[], startingBalance
     currentBalance,
     end_of_month_projection: endOfMonthProjection,
     bills_to_pay: billsToPay,
+    bills_next_7_days: billsNext7Days,
     incoming_this_week: incomingThisWeek,
     paid_this_week: paidThisWeek,
     spent_this_month: spentThisMonth,
+    income_this_month: incomeThisMonth,
+    net_this_month: incomeThisMonth - spentThisMonth,
     biggest_expense_this_month: biggestExpenseThisMonth,
+    biggest_income_this_month: biggestIncomeThisMonth,
   } satisfies Record<WidgetKey | "currentBalance", number>;
 }

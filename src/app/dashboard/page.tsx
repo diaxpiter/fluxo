@@ -1,21 +1,31 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { logout } from "@/app/auth/actions";
 import { TransactionList } from "@/app/dashboard/transaction-list";
-import { StartingBalanceEditor } from "@/app/dashboard/starting-balance-editor";
-import { AddTransactionFab } from "@/app/dashboard/add-transaction-fab";
-import { ImportTransactions } from "@/app/dashboard/import-transactions";
 import { WidgetCard } from "@/app/dashboard/widget-card";
-import { WidgetCustomizer } from "@/app/dashboard/widget-customizer";
 import { formatCurrency } from "@/lib/currency";
-import { cardClass, btnGhostClass, numericClass } from "@/lib/ui";
-import { computeWidgetValues, groupByTier, DEFAULT_WIDGETS, type WidgetKey, type WidgetPref } from "@/lib/widgets";
-import type { Account, Category, Transaction } from "@/lib/types";
+import { cardClass, linkClass, numericClass } from "@/lib/ui";
+import { accountDisplayName, getDashboardContext, getLedgerRows } from "@/lib/dashboard-data";
+import { getDictionary, getLocale } from "@/lib/i18n/dictionary";
+import { format } from "@/lib/i18n/format";
+import { computeWidgetValues, layoutRows, todayYmd, type WidgetKey } from "@/lib/widgets";
+
+const RECENT_COUNT = 5;
 
 function toneFor(key: WidgetKey, value: number): "neutral" | "negative" | "positive" {
-  if (key === "end_of_month_projection") return value < 0 ? "negative" : "neutral";
-  if (key === "incoming_this_week") return "positive";
-  if (key === "bills_to_pay" || key === "paid_this_week" || key === "spent_this_month") return "negative";
+  if (key === "end_of_month_projection" || key === "net_this_month") return value < 0 ? "negative" : "neutral";
+  if (key === "incoming_this_week" || key === "income_this_month" || key === "biggest_income_this_month") {
+    return "positive";
+  }
+  if (
+    key === "bills_to_pay" ||
+    key === "bills_next_7_days" ||
+    key === "paid_this_week" ||
+    key === "spent_this_month" ||
+    key === "biggest_expense_this_month"
+  ) {
+    return "negative";
+  }
   return "neutral";
 }
 
@@ -29,99 +39,57 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
+  const locale = await getLocale();
+  const t = getDictionary(locale);
+
   const displayName = (user.user_metadata?.display_name as string) || user.email;
   const firstName = displayName?.split(" ")[0];
 
-  const [{ data: profile }, { data: accounts }, { data: categories }] = await Promise.all([
-    supabase.from("profiles").select("currency, widgets").eq("id", user.id).single(),
-    supabase
-      .from("accounts")
-      .select("*")
-      .eq("user_id", user.id)
-      .eq("is_archived", false)
-      .order("created_at", { ascending: true }),
-    supabase
-      .from("categories")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: true }),
-  ]);
-
-  const account = (accounts as Account[] | null)?.[0] ?? null;
-  const currency = profile?.currency ?? "EUR";
-  const categoryList = (categories as Category[] | null) ?? [];
-  const widgetPrefs = (profile?.widgets as WidgetPref[] | null) ?? DEFAULT_WIDGETS;
-
-  const { data: rawTransactions } = account
-    ? await supabase
-        .from("transactions")
-        .select("*")
-        .eq("account_id", account.id)
-        .order("date", { ascending: true })
-        .order("created_at", { ascending: true })
-    : { data: [] as Transaction[] };
-
-  const transactions = (rawTransactions as Transaction[] | null) ?? [];
-
-  const rows = transactions.reduce<Array<Transaction & { balance: number }>>((acc, t) => {
-    const previousBalance = acc.at(-1)?.balance ?? account?.starting_balance ?? 0;
-    acc.push({ ...t, balance: previousBalance + Number(t.amount) });
-    return acc;
-  }, []);
-
-  const widgetValues = computeWidgetValues(transactions, account?.starting_balance ?? 0);
+  const { account, categories, currency, widgetPrefs } = await getDashboardContext(supabase, user.id);
+  const rows = await getLedgerRows(supabase, account?.id ?? null, account?.starting_balance ?? 0);
+  const today = todayYmd();
+  const recentRows = rows.filter((r) => r.date <= today).slice(-RECENT_COUNT);
+  const widgetValues = computeWidgetValues(rows, account?.starting_balance ?? 0);
 
   return (
-    <main className="flex flex-1 flex-col px-4 pb-28 pt-8 sm:py-12">
+    <main className="flex flex-1 flex-col px-4 pb-24 pt-8 sm:py-12">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-sm font-medium tracking-tight text-foreground/50">
-              <span className="text-emerald-500">.</span>fluxo
-            </p>
-            <h1 className="mt-2 truncate text-xl font-semibold tracking-tight">Hi, {firstName}</h1>
-            <p className="mt-0.5 truncate text-sm text-foreground/50">{user.email}</p>
-          </div>
-          <form action={logout} className="shrink-0">
-            <button type="submit" className={btnGhostClass}>
-              Log out
-            </button>
-          </form>
+        <div className="min-w-0">
+          <p className="text-sm font-medium tracking-tight text-foreground/50">
+            <span className="text-emerald-500">.</span>fluxo
+          </p>
+          <h1 className="mt-2 truncate text-xl font-semibold tracking-tight">
+            {format(t.home.greeting, { firstName: firstName ?? "" })}
+          </h1>
+          <p className="mt-0.5 truncate text-sm text-foreground/50">{user.email}</p>
         </div>
 
         {!account ? (
-          <div className={`${cardClass} p-6 text-sm text-foreground/50`}>Setting up your account…</div>
+          <div className={`${cardClass} p-6 text-sm text-foreground/50`}>{t.common.settingUpAccount}</div>
         ) : (
           <>
-            <div className={`${cardClass} flex flex-wrap items-end justify-between gap-3 p-5 sm:p-6`}>
-              <div className="min-w-0">
-                <p className="text-sm text-foreground/50">{account.name}</p>
-                <p
-                  className={`mt-1 text-2xl font-semibold tracking-tight sm:text-3xl ${numericClass} ${
-                    widgetValues.currentBalance < 0 ? "text-red-400" : "text-foreground"
-                  }`}
-                >
-                  {formatCurrency(widgetValues.currentBalance, currency)}
-                </p>
-              </div>
-              <StartingBalanceEditor accountId={account.id} startingBalance={account.starting_balance} />
+            <div className={`${cardClass} p-5 sm:p-6`}>
+              <p className="text-sm text-foreground/50">{accountDisplayName(account, t.common.mainAccount)}</p>
+              <p
+                className={`mt-1 text-2xl font-semibold tracking-tight sm:text-3xl ${numericClass} ${
+                  widgetValues.currentBalance < 0 ? "text-red-400" : "text-foreground"
+                }`}
+              >
+                {formatCurrency(widgetValues.currentBalance, currency, locale)}
+              </p>
             </div>
 
             <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-medium text-foreground/50">Overview</h2>
-                <WidgetCustomizer widgets={widgetPrefs} />
-              </div>
-
+              <h2 className="text-sm font-medium text-foreground/50">{t.home.overview}</h2>
               <div className="flex flex-col gap-3">
-                {groupByTier(widgetPrefs.filter((w) => w.visible)).map((tierWidgets, tierIndex) => (
-                  <div key={tierWidgets.map((w) => w.key).join("-")} className="flex gap-3">
-                    {tierWidgets.map((w, i) => (
+                {layoutRows(widgetPrefs.filter((w) => w.visible)).map((rowWidgets, rowIndex) => (
+                  <div key={rowWidgets.map((w) => w.key).join("-")} className="flex gap-3">
+                    {rowWidgets.map((w, i) => (
                       <WidgetCard
                         key={w.key}
-                        title={w.title}
-                        value={formatCurrency(widgetValues[w.key], currency)}
-                        delayMs={(tierIndex * 2 + i) * 40}
+                        title={t.widgets[w.key]}
+                        value={formatCurrency(widgetValues[w.key], currency, locale)}
+                        delayMs={(rowIndex * 2 + i) * 40}
                         tone={toneFor(w.key, widgetValues[w.key])}
                       />
                     ))}
@@ -132,16 +100,23 @@ export default async function DashboardPage() {
 
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
-                <h2 className="text-sm font-medium text-foreground/50">Ledger</h2>
-                <ImportTransactions accountId={account.id} currency={currency} />
+                <h2 className="text-sm font-medium text-foreground/50">{t.home.recentActivity}</h2>
+                <Link href="/dashboard/history" className={`${linkClass} text-xs`}>
+                  {t.home.viewAll}
+                </Link>
               </div>
-              <TransactionList rows={rows} categories={categoryList} currency={currency} />
+              <TransactionList
+                rows={recentRows}
+                categories={categories}
+                currency={currency}
+                locale={locale}
+                t={t.transactionList}
+                common={t.common}
+              />
             </div>
           </>
         )}
       </div>
-
-      {account && <AddTransactionFab accountId={account.id} categories={categoryList} />}
     </main>
   );
 }

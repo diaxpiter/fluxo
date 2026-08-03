@@ -1,3 +1,3 @@
-export function formatCurrency(amount: number, currency: string) {
-  return new Intl.NumberFormat("en-IE", { style: "currency", currency }).format(amount);
+export function formatCurrency(amount: number, currency: string, locale: string = "en-US") {
+  return new Intl.NumberFormat(locale, { style: "currency", currency }).format(amount);
 }

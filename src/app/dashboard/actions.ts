@@ -1,9 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
-import { DEFAULT_WIDGETS } from "@/lib/widgets";
+import type { WidgetKey, WidgetPref } from "@/lib/widgets";
 import { parseWorkbook, type MonthCheck } from "@/lib/import-excel";
+import { getDictionary, getLocale } from "@/lib/i18n/dictionary";
+import { LOCALE_COOKIE, isLocale } from "@/lib/i18n/locales";
 
 function signedAmount(formData: FormData) {
   const magnitude = Math.abs(Number(formData.get("amount")));
@@ -30,6 +33,7 @@ export async function addTransaction(formData: FormData) {
   });
 
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard/history");
 }
 
 export async function updateTransaction(formData: FormData) {
@@ -53,6 +57,7 @@ export async function updateTransaction(formData: FormData) {
     .eq("user_id", user.id);
 
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard/history");
 }
 
 export async function deleteTransaction(formData: FormData) {
@@ -69,6 +74,7 @@ export async function deleteTransaction(formData: FormData) {
     .eq("user_id", user.id);
 
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard/history");
 }
 
 export async function updateStartingBalance(formData: FormData) {
@@ -85,6 +91,28 @@ export async function updateStartingBalance(formData: FormData) {
     .eq("user_id", user.id);
 
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard/history");
+  revalidatePath("/dashboard/settings");
+}
+
+export async function updateLanguage(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const language = formData.get("language") as string | null;
+  if (!isLocale(language)) return;
+
+  await supabase.from("profiles").update({ language }).eq("id", user.id);
+
+  const cookieStore = await cookies();
+  cookieStore.set(LOCALE_COOKIE, language, { path: "/", maxAge: 60 * 60 * 24 * 365 });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/history");
+  revalidatePath("/dashboard/settings");
 }
 
 export async function updateWidgetPrefs(formData: FormData) {
@@ -94,21 +122,17 @@ export async function updateWidgetPrefs(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) return;
 
-  const orderedKeys = formData.getAll("order") as string[];
-  const widgets = orderedKeys.map((key) => {
-    const fallback = DEFAULT_WIDGETS.find((w) => w.key === key);
-    const tier = Number(formData.get(`tier_${key}`));
-    return {
-      key,
-      title: (formData.get(`title_${key}`) as string)?.trim() || fallback?.title || key,
-      visible: formData.get(`visible_${key}`) === "on",
-      tier: Number.isFinite(tier) && tier > 0 ? tier : (fallback?.tier ?? 1),
-    };
-  });
+  const orderedKeys = formData.getAll("order") as WidgetKey[];
+  const widgets: WidgetPref[] = orderedKeys.map((key) => ({
+    key,
+    visible: formData.get(`visible_${key}`) === "on",
+    wide: formData.get(`wide_${key}`) === "on",
+  }));
 
   await supabase.from("profiles").update({ widgets }).eq("id", user.id);
 
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard/settings");
 }
 
 export type ImportResult =
@@ -122,20 +146,22 @@ export async function importTransactions(formData: FormData): Promise<ImportResu
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Not signed in." };
 
+  const t = getDictionary(await getLocale()).importTransactions;
+
   const accountId = formData.get("accountId") as string;
   const file = formData.get("file") as File | null;
-  if (!file || file.size === 0) return { ok: false, error: "No file selected." };
+  if (!file || file.size === 0) return { ok: false, error: t.noFileSelected };
 
   let parsed;
   try {
     const buffer = await file.arrayBuffer();
     parsed = parseWorkbook(buffer);
   } catch {
-    return { ok: false, error: "Couldn't read that file — is it a valid .xlsx workbook?" };
+    return { ok: false, error: t.invalidFile };
   }
 
   if (parsed.transactions.length === 0) {
-    return { ok: false, error: "No transactions found in that file." };
+    return { ok: false, error: t.noTransactionsFound };
   }
 
   const { error: balanceError } = await supabase
@@ -158,6 +184,7 @@ export async function importTransactions(formData: FormData): Promise<ImportResu
   if (insertError) return { ok: false, error: insertError.message };
 
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard/history");
 
   return {
     ok: true,
@@ -184,4 +211,5 @@ export async function addCategory(formData: FormData) {
   });
 
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard/history");
 }

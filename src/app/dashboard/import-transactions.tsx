@@ -4,8 +4,20 @@ import { useRef, useState, useTransition } from "react";
 import { importTransactions, type ImportResult } from "@/app/dashboard/actions";
 import { formatCurrency } from "@/lib/currency";
 import { cardClass, btnPrimaryClass, btnGhostClass, linkClass, numericClass } from "@/lib/ui";
+import type { Dictionary } from "@/lib/i18n/dictionary";
+import { format } from "@/lib/i18n/format";
 
-export function ImportTransactions({ accountId, currency }: { accountId: string; currency: string }) {
+export function ImportTransactions({
+  accountId,
+  currency,
+  locale,
+  t,
+}: {
+  accountId: string;
+  currency: string;
+  locale: string;
+  t: Dictionary["importTransactions"];
+}) {
   const [open, setOpen] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -20,7 +32,7 @@ export function ImportTransactions({ accountId, currency }: { accountId: string;
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)} className={`${linkClass} text-xs`}>
-        Import from Excel
+        {t.linkText}
       </button>
     );
   }
@@ -35,11 +47,11 @@ export function ImportTransactions({ accountId, currency }: { accountId: string;
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold tracking-tight">Import from Excel</h2>
+          <h2 className="text-lg font-semibold tracking-tight">{t.heading}</h2>
           <button
             type="button"
             onClick={close}
-            aria-label="Close"
+            aria-label={t.closeLabel}
             className="cursor-pointer text-foreground/50 transition-colors hover:text-foreground"
           >
             ✕
@@ -48,11 +60,7 @@ export function ImportTransactions({ accountId, currency }: { accountId: string;
 
         {!result && (
           <>
-            <p className="mb-4 text-sm text-foreground/60">
-              One sheet per month, oldest first. The first row of each sheet is treated as a
-              carry-over balance (skipped), everything else is imported as a transaction. This
-              also overwrites the account&apos;s starting balance.
-            </p>
+            <p className="mb-4 text-sm text-foreground/60">{t.helpText}</p>
             <form
               ref={formRef}
               action={(formData) => {
@@ -72,7 +80,7 @@ export function ImportTransactions({ accountId, currency }: { accountId: string;
                 className="text-sm file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-foreground file:px-3 file:py-2 file:text-sm file:font-medium file:text-background"
               />
               <button type="submit" disabled={isPending} className={`${btnPrimaryClass} mt-1`}>
-                {isPending ? "Importing…" : "Import"}
+                {isPending ? t.importingButton : t.importButton}
               </button>
             </form>
           </>
@@ -84,7 +92,7 @@ export function ImportTransactions({ accountId, currency }: { accountId: string;
               {result.error}
             </p>
             <button type="button" onClick={close} className={btnGhostClass}>
-              Close
+              {t.closeLabel}
             </button>
           </div>
         )}
@@ -92,9 +100,10 @@ export function ImportTransactions({ accountId, currency }: { accountId: string;
         {result && result.ok && (
           <div className="flex flex-col gap-4">
             <p className="text-sm">
-              Imported <span className="font-medium">{result.insertedCount}</span> transactions.
-              Starting balance set to{" "}
-              <span className={numericClass}>{formatCurrency(result.startingBalance, currency)}</span>.
+              {format(t.summary, {
+                count: result.insertedCount,
+                balance: formatCurrency(result.startingBalance, currency, locale),
+              })}
             </p>
 
             <div className={`${cardClass} divide-y divide-foreground/5`}>
@@ -102,9 +111,9 @@ export function ImportTransactions({ accountId, currency }: { accountId: string;
                 <div key={m.sheet} className="flex items-center justify-between px-4 py-2.5 text-sm">
                   <span className="text-foreground/70">{m.sheet}</span>
                   <span className="flex items-center gap-2">
-                    <span className={numericClass}>{formatCurrency(m.computedEndBalance, currency)}</span>
+                    <span className={numericClass}>{formatCurrency(m.computedEndBalance, currency, locale)}</span>
                     <span className={m.matches ? "text-emerald-500" : "text-red-400"}>
-                      {m.matches ? "✓" : `✗ (expected ${formatCurrency(m.expectedEndBalance, currency)})`}
+                      {m.matches ? "✓" : `✗ (expected ${formatCurrency(m.expectedEndBalance, currency, locale)})`}
                     </span>
                   </span>
                 </div>
@@ -112,7 +121,7 @@ export function ImportTransactions({ accountId, currency }: { accountId: string;
             </div>
 
             <button type="button" onClick={close} className={btnPrimaryClass}>
-              Done
+              {t.done}
             </button>
           </div>
         )}
