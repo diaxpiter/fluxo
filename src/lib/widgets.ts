@@ -196,6 +196,7 @@ export function computeWidgetValues(
     const amount = bill.is_variable ? bill.estimated_amount ?? 0 : bill.amount ?? 0;
     billsToPay += amount;
     const dueDate = dueDateThisMonth(bill.due_day_of_month, now);
+    if (dueDate <= monthEnd) endOfMonthProjection -= amount;
     if (dueDate >= today && dueDate <= next7End) billsNext7Days += amount;
   }
 
@@ -214,9 +215,11 @@ export function computeWidgetValues(
     ) {
       continue;
     }
+    const amount = source.expected_amount ?? 0;
     const expectedDate = shiftedDateThisMonth(source.day_of_month, source.weekend_holiday_rule, now);
+    if (expectedDate <= monthEnd) endOfMonthProjection += amount;
     if (expectedDate >= today && expectedDate <= weekEnd) {
-      incomingThisWeek += source.expected_amount ?? 0;
+      incomingThisWeek += amount;
     }
   }
 
