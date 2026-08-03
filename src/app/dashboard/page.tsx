@@ -118,6 +118,12 @@ export default async function DashboardPage() {
                       </p>
                     </div>
                   ))}
+                  <div className="flex items-center justify-between gap-3 bg-foreground/[0.03] p-4">
+                    <p className="text-sm font-medium text-foreground/70">{t.accounts.totalLabel}</p>
+                    <p className={`text-sm font-semibold ${numericClass}`}>
+                      {formatCurrency(widgetValues.currentBalance, currency, locale)}
+                    </p>
+                  </div>
                 </div>
               )}
             </div>

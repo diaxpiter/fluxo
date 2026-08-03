@@ -58,6 +58,7 @@ export const pt_BR: Dictionary = {
     typeLabel: "Tipo",
     startingBalanceLabel: "Saldo inicial",
     includeInOverviewLabel: "Incluir na visão geral",
+    totalLabel: "Total",
     addButton: "+ Adicionar conta",
     archiveButton: "Arquivar",
     archiveTitle: "Arquivar conta?",

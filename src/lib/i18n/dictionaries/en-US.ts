@@ -58,6 +58,7 @@ export const en_US: Dictionary = {
     typeLabel: "Type",
     startingBalanceLabel: "Starting balance",
     includeInOverviewLabel: "Include in overview",
+    totalLabel: "Total",
     addButton: "+ Add account",
     archiveButton: "Archive",
     archiveTitle: "Archive account?",

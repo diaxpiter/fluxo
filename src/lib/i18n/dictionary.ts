@@ -57,6 +57,7 @@ export type Dictionary = {
     typeLabel: string;
     startingBalanceLabel: string;
     includeInOverviewLabel: string;
+    totalLabel: string;
     addButton: string;
     archiveButton: string;
     archiveTitle: string;
