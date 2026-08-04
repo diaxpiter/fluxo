@@ -3,16 +3,27 @@ import { monthBoundsYmd, normalizeWidgetPrefs, todayYmd, type WidgetPref } from 
 import type { Dictionary } from "@/lib/i18n/dictionary";
 import type { Account, AllocationRule, Category, IncomeSource, RecurringBill, Transaction } from "@/lib/types";
 
-export async function getDashboardContext(supabase: SupabaseClient, userId: string) {
+type ProfileRow = { currency: string | null; widgets: WidgetPref[] | null } | null;
+
+/**
+ * `profile` is passed in (rather than queried here) so callers can fetch it via the cached
+ * `getProfile` in `@/lib/supabase/server` -- shared with the layout's own profile lookup -- while
+ * keeping this file free of server-only imports, since it's also imported by client components.
+ */
+export async function getDashboardContext(
+  supabase: SupabaseClient,
+  userId: string,
+  profile: ProfileRow | Promise<ProfileRow>,
+) {
   const [
-    { data: profile },
+    resolvedProfile,
     { data: accounts },
     { data: categories },
     { data: recurringBills },
     { data: incomeSources },
     { data: allocationRules },
   ] = await Promise.all([
-    supabase.from("profiles").select("currency, widgets").eq("id", userId).single(),
+    profile,
     supabase
       .from("accounts")
       .select("*")
@@ -42,9 +53,9 @@ export async function getDashboardContext(supabase: SupabaseClient, userId: stri
   ]);
 
   const accountList = (accounts as Account[] | null) ?? [];
-  const currency = profile?.currency ?? "EUR";
+  const currency = resolvedProfile?.currency ?? "EUR";
   const categoryList = (categories as Category[] | null) ?? [];
-  const widgetPrefs = normalizeWidgetPrefs(profile?.widgets as WidgetPref[] | null);
+  const widgetPrefs = normalizeWidgetPrefs(resolvedProfile?.widgets as WidgetPref[] | null);
   const recurringBillList = (recurringBills as RecurringBill[] | null) ?? [];
   const incomeSourceList = (incomeSources as IncomeSource[] | null) ?? [];
   const allocationRuleList = (allocationRules as AllocationRule[] | null) ?? [];

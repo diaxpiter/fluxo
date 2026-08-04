@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthenticatedUser, getProfile } from "@/lib/supabase/server";
 import { RecentActivityList } from "@/app/dashboard/recent-activity-list";
 import { WidgetCard } from "@/app/dashboard/widget-card";
 import { TransferButton } from "@/app/dashboard/transfer-button";
@@ -38,9 +38,7 @@ function toneFor(key: WidgetKey, value: number): "neutral" | "negative" | "posit
 
 export default async function DashboardPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthenticatedUser();
 
   if (!user) {
     redirect("/login");
@@ -55,6 +53,7 @@ export default async function DashboardPage() {
   const { accounts, categories, currency, widgetPrefs, recurringBills, incomeSources } = await getDashboardContext(
     supabase,
     user.id,
+    getProfile(user.id),
   );
   const transactions = await getTransactionsForAccounts(supabase, accounts.map((a) => a.id));
   const balances = computeAccountBalances(accounts, transactions);

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthenticatedUser, getProfile } from "@/lib/supabase/server";
 import { AddTransactionFab } from "@/app/dashboard/add-transaction-fab";
 import { ImportTransactions } from "@/app/dashboard/import-transactions";
 import { TransactionList } from "@/app/dashboard/transaction-list";
@@ -15,9 +15,7 @@ export default async function HistoryPage({
   searchParams: Promise<{ account?: string }>;
 }) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthenticatedUser();
 
   if (!user) {
     redirect("/login");
@@ -26,8 +24,10 @@ export default async function HistoryPage({
   const locale = await getLocale();
   const t = getDictionary(locale);
 
-  const { accounts, categories, currency } = await getDashboardContext(supabase, user.id);
-  const { account: requestedAccountId } = await searchParams;
+  const [{ accounts, categories, currency }, { account: requestedAccountId }] = await Promise.all([
+    getDashboardContext(supabase, user.id, getProfile(user.id)),
+    searchParams,
+  ]);
   const account = accounts.find((a) => a.id === requestedAccountId) ?? accounts[0] ?? null;
 
   const rows = await getLedgerRows(supabase, account?.id ?? null, account?.starting_balance ?? 0);

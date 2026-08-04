@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthenticatedUser, getProfile } from "@/lib/supabase/server";
 import { logout } from "@/app/auth/actions";
 import { WidgetCustomizer } from "@/app/dashboard/widget-customizer";
 import { LanguageSelector } from "@/app/dashboard/language-selector";
@@ -19,9 +19,7 @@ import { cardClass, btnGhostClass } from "@/lib/ui";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthenticatedUser();
 
   if (!user) {
     redirect("/login");
@@ -31,11 +29,13 @@ export default async function SettingsPage() {
   const t = getDictionary(locale);
 
   const { accounts, categories, currency, widgetPrefs, recurringBills, incomeSources, allocationRules } =
-    await getDashboardContext(supabase, user.id);
-  const transactions = await getTransactionsForAccounts(supabase, accounts.map((a) => a.id));
+    await getDashboardContext(supabase, user.id, getProfile(user.id));
+  const [transactions, paidBillIds, receivedSourceIds] = await Promise.all([
+    getTransactionsForAccounts(supabase, accounts.map((a) => a.id)),
+    getPaidRecurringBillIds(supabase),
+    getReceivedIncomeSourceIds(supabase),
+  ]);
   const balances = computeAccountBalances(accounts, transactions);
-  const paidBillIds = await getPaidRecurringBillIds(supabase);
-  const receivedSourceIds = await getReceivedIncomeSourceIds(supabase);
 
   return (
     <main className="flex flex-1 flex-col px-4 pb-24 pt-8 sm:py-12">
