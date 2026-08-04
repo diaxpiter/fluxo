@@ -1,6 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { cache } from "react";
+
+export type AuthenticatedUser = {
+  id: string;
+  email: string | null;
+  user_metadata: { display_name?: string };
+};
 
 export async function createClient() {
   const cookieStore = await cookies();
@@ -28,13 +34,35 @@ export async function createClient() {
   );
 }
 
-/** Deduped per-request: layouts and pages that both need the user share one Supabase Auth round trip. */
-export const getAuthenticatedUser = cache(async () => {
+/**
+ * Deduped per-request: layouts and pages that both need the user share one lookup. The
+ * proxy middleware already ran auth.getUser() (a real network round trip to Supabase) for
+ * every request that reaches here, so we trust the identity it forwarded via headers
+ * instead of paying for a second round trip on every navigation. Falls back to a direct
+ * auth.getUser() call for anything the middleware matcher doesn't cover.
+ */
+export const getAuthenticatedUser = cache(async (): Promise<AuthenticatedUser | null> => {
+  const headerList = await headers();
+  const trustedId = headerList.get("x-supabase-user-id");
+  if (trustedId) {
+    return {
+      id: trustedId,
+      email: headerList.get("x-supabase-user-email") || null,
+      user_metadata: { display_name: headerList.get("x-supabase-user-display-name") || undefined },
+    };
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  return user;
+  if (!user) return null;
+
+  return {
+    id: user.id,
+    email: user.email ?? null,
+    user_metadata: { display_name: user.user_metadata?.display_name as string | undefined },
+  };
 });
 
 /**

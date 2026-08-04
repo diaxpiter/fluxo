@@ -58,7 +58,8 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in-up,
-  .animate-modal-in {
+  .animate-modal-in,
+  .animate-pulse {
     animation: none;
   }
 }
