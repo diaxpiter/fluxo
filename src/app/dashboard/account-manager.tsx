@@ -12,6 +12,7 @@ import {
   btnGhostClass,
   btnDestructiveClass,
   linkClass,
+  actionLinkClass,
   numericClass,
 } from "@/lib/ui";
 import type { Dictionary } from "@/lib/i18n/dictionary";
@@ -98,20 +99,21 @@ function AccountRow({
   }
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-foreground/5 p-4 last:border-0">
-      <div className="min-w-0">
-        <p className="truncate text-sm font-medium">{accountDisplayName(account, t.common.mainAccount)}</p>
-        <p className="mt-0.5 truncate text-xs text-foreground/50">{t.accountTypes[account.type]}</p>
+    <div className="border-b border-foreground/5 p-4 last:border-0">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium">{accountDisplayName(account, t.common.mainAccount)}</p>
+          <p className="mt-0.5 truncate text-xs text-foreground/50">{t.accountTypes[account.type]}</p>
+        </div>
+        <p className={`shrink-0 text-sm ${numericClass}`}>{formatCurrency(balance, currency, locale)}</p>
       </div>
 
-      <div className="flex shrink-0 flex-wrap items-center gap-3">
-        <p className={`text-sm ${numericClass}`}>{formatCurrency(balance, currency, locale)}</p>
-
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
         <form action={updateAccount} onChange={(e) => e.currentTarget.requestSubmit()}>
           <input type="hidden" name="id" value={account.id} />
           <input type="hidden" name="name" value={account.name} />
           <input type="hidden" name="type" value={account.type} />
-          <label className="flex items-center gap-1.5 text-xs text-foreground/50">
+          <label className="flex items-center gap-1.5 text-foreground/50">
             <input
               type="checkbox"
               name="includeInOverview"
@@ -122,18 +124,16 @@ function AccountRow({
           </label>
         </form>
 
-        <div className="flex items-center gap-3 text-xs">
-          <StartingBalanceEditor
-            accountId={account.id}
-            startingBalance={account.starting_balance}
-            t={t.startingBalance}
-            common={t.common}
-          />
-          <button type="button" onClick={() => setEditing(true)} className={linkClass}>
-            {t.common.edit}
-          </button>
-          <ArchiveButton account={account} t={t} />
-        </div>
+        <StartingBalanceEditor
+          accountId={account.id}
+          startingBalance={account.starting_balance}
+          t={t.startingBalance}
+          common={t.common}
+        />
+        <button type="button" onClick={() => setEditing(true)} className={actionLinkClass}>
+          {t.common.edit}
+        </button>
+        <ArchiveButton account={account} t={t} />
       </div>
     </div>
   );
@@ -144,7 +144,7 @@ function ArchiveButton({ account, t }: { account: Account; t: Dictionary }) {
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className={`${linkClass} hover:text-red-400`}>
+      <button type="button" onClick={() => setOpen(true)} className={`${actionLinkClass} hover:text-red-400`}>
         {t.accounts.archiveButton}
       </button>
 

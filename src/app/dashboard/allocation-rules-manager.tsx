@@ -16,6 +16,7 @@ import {
   btnGhostClass,
   btnDestructiveClass,
   linkClass,
+  actionLinkClass,
 } from "@/lib/ui";
 import type { Dictionary } from "@/lib/i18n/dictionary";
 import { accountDisplayName } from "@/lib/dashboard-data";
@@ -149,7 +150,7 @@ function RuleRow({
         : "";
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-foreground/5 p-4 last:border-0">
+    <div className="border-b border-foreground/5 p-4 last:border-0">
       <div className="min-w-0">
         <p className="truncate text-sm font-medium">{accountName}</p>
         <p className="mt-0.5 truncate text-xs text-foreground/50">
@@ -158,13 +159,13 @@ function RuleRow({
         </p>
       </div>
 
-      <div className="flex shrink-0 flex-wrap items-center gap-3">
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
         <form action={updateAllocationRule} onChange={(e) => e.currentTarget.requestSubmit()}>
           <input type="hidden" name="id" value={rule.id} />
           <input type="hidden" name="targetAccountId" value={rule.target_account_id} />
           <input type="hidden" name="method" value={rule.method} />
           <input type="hidden" name="value" value={rule.value ?? ""} />
-          <label className="flex items-center gap-1.5 text-xs text-foreground/50">
+          <label className="flex items-center gap-1.5 text-foreground/50">
             <input
               type="checkbox"
               name="isActive"
@@ -175,12 +176,12 @@ function RuleRow({
           </label>
         </form>
 
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={onMoveUp}
             disabled={!canMoveUp}
-            className={`${linkClass} disabled:pointer-events-none disabled:opacity-30`}
+            className={`${actionLinkClass} disabled:pointer-events-none disabled:opacity-30`}
             aria-label={format(t.widgetCustomizer.moveUp, { title: accountName })}
           >
             ↑
@@ -189,19 +190,17 @@ function RuleRow({
             type="button"
             onClick={onMoveDown}
             disabled={!canMoveDown}
-            className={`${linkClass} disabled:pointer-events-none disabled:opacity-30`}
+            className={`${actionLinkClass} disabled:pointer-events-none disabled:opacity-30`}
             aria-label={format(t.widgetCustomizer.moveDown, { title: accountName })}
           >
             ↓
           </button>
         </div>
 
-        <div className="flex items-center gap-3 text-xs">
-          <button type="button" onClick={() => setEditing(true)} className={linkClass}>
-            {t.common.edit}
-          </button>
-          <DeleteRuleButton rule={rule} accountName={accountName} t={t} />
-        </div>
+        <button type="button" onClick={() => setEditing(true)} className={actionLinkClass}>
+          {t.common.edit}
+        </button>
+        <DeleteRuleButton rule={rule} accountName={accountName} t={t} />
       </div>
     </div>
   );
@@ -220,7 +219,7 @@ function DeleteRuleButton({
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className={`${linkClass} hover:text-red-400`}>
+      <button type="button" onClick={() => setOpen(true)} className={`${actionLinkClass} hover:text-red-400`}>
         {t.common.delete}
       </button>
 

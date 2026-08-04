@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { updateWidgetPrefs } from "@/app/dashboard/actions";
-import { btnPrimaryClass, linkClass } from "@/lib/ui";
+import { btnPrimaryClass, actionLinkClass } from "@/lib/ui";
 import { type WidgetKey, type WidgetPref } from "@/lib/widgets";
 import type { Dictionary } from "@/lib/i18n/dictionary";
 import { format } from "@/lib/i18n/format";
@@ -71,7 +71,7 @@ export function WidgetCustomizer({
                   type="button"
                   onClick={() => move(key, -1)}
                   disabled={i === 0}
-                  className={`${linkClass} disabled:pointer-events-none disabled:opacity-30`}
+                  className={`${actionLinkClass} disabled:pointer-events-none disabled:opacity-30`}
                   aria-label={format(t.moveUp, { title: widgetTitles[key] })}
                 >
                   ↑
@@ -80,7 +80,7 @@ export function WidgetCustomizer({
                   type="button"
                   onClick={() => move(key, 1)}
                   disabled={i === order.length - 1}
-                  className={`${linkClass} disabled:pointer-events-none disabled:opacity-30`}
+                  className={`${actionLinkClass} disabled:pointer-events-none disabled:opacity-30`}
                   aria-label={format(t.moveDown, { title: widgetTitles[key] })}
                 >
                   ↓

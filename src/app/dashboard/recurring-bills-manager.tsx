@@ -16,6 +16,7 @@ import {
   btnGhostClass,
   btnDestructiveClass,
   linkClass,
+  actionLinkClass,
   numericClass,
 } from "@/lib/ui";
 import type { Dictionary } from "@/lib/i18n/dictionary";
@@ -114,20 +115,21 @@ function BillRow({
   const accountName = account ? accountDisplayName(account, t.common.mainAccount) : "";
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-foreground/5 p-4 last:border-0">
-      <div className="min-w-0">
-        <p className="truncate text-sm font-medium">{bill.name}</p>
-        <p className="mt-0.5 truncate text-xs text-foreground/50">
-          {format(t.recurringBills.dueDayBadge, { day: bill.due_day_of_month })} · {categoryName} · {accountName}
-        </p>
-      </div>
-
-      <div className="flex shrink-0 flex-wrap items-center gap-3">
-        <p className={`text-sm ${numericClass}`}>
+    <div className="border-b border-foreground/5 p-4 last:border-0">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium">{bill.name}</p>
+          <p className="mt-0.5 truncate text-xs text-foreground/50">
+            {format(t.recurringBills.dueDayBadge, { day: bill.due_day_of_month })} · {categoryName} · {accountName}
+          </p>
+        </div>
+        <p className={`shrink-0 text-sm ${numericClass}`}>
           {bill.is_variable ? "~" : ""}
           {formatCurrency(amount, currency, locale)}
         </p>
+      </div>
 
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
         <form action={updateRecurringBill} onChange={(e) => e.currentTarget.requestSubmit()}>
           <input type="hidden" name="id" value={bill.id} />
           <input type="hidden" name="name" value={bill.name} />
@@ -136,7 +138,7 @@ function BillRow({
           <input type="hidden" name="dueDayOfMonth" value={bill.due_day_of_month} />
           <input type="hidden" name="accountId" value={bill.account_id} />
           <input type="hidden" name="categoryId" value={bill.category_id ?? ""} />
-          <label className="flex items-center gap-1.5 text-xs text-foreground/50">
+          <label className="flex items-center gap-1.5 text-foreground/50">
             <input
               type="checkbox"
               name="isActive"
@@ -147,17 +149,15 @@ function BillRow({
           </label>
         </form>
 
-        <div className="flex items-center gap-3 text-xs">
-          {paid ? (
-            <span className="text-emerald-500">{t.recurringBills.paidThisMonth}</span>
-          ) : (
-            <PayButton bill={bill} t={t} />
-          )}
-          <button type="button" onClick={() => setEditing(true)} className={linkClass}>
-            {t.common.edit}
-          </button>
-          <DeleteBillButton bill={bill} t={t} />
-        </div>
+        {paid ? (
+          <span className="text-emerald-500">{t.recurringBills.paidThisMonth}</span>
+        ) : (
+          <PayButton bill={bill} t={t} />
+        )}
+        <button type="button" onClick={() => setEditing(true)} className={actionLinkClass}>
+          {t.common.edit}
+        </button>
+        <DeleteBillButton bill={bill} t={t} />
       </div>
     </div>
   );
@@ -172,7 +172,7 @@ function PayButton({ bill, t }: { bill: RecurringBill; t: Dictionary }) {
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className={linkClass}>
+      <button type="button" onClick={() => setOpen(true)} className={actionLinkClass}>
         {t.recurringBills.markAsPaid}
       </button>
 
@@ -250,7 +250,7 @@ function DeleteBillButton({ bill, t }: { bill: RecurringBill; t: Dictionary }) {
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className={`${linkClass} hover:text-red-400`}>
+      <button type="button" onClick={() => setOpen(true)} className={`${actionLinkClass} hover:text-red-400`}>
         {t.common.delete}
       </button>
 

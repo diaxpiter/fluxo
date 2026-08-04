@@ -34,7 +34,7 @@ export default async function OnboardingPage() {
   const mainAccount = (accounts as Account[] | null)?.[0] ?? null;
 
   return (
-    <main className="flex flex-1 flex-col px-4 pb-16 pt-8 sm:py-12">
+    <main className="flex flex-1 flex-col px-4 pb-16 pt-[calc(env(safe-area-inset-top)+2rem)] sm:pt-12 sm:pb-16">
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
         <p className="text-sm font-medium tracking-tight text-foreground/50">
           <span className="text-emerald-500">.</span>fluxo

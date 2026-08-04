@@ -19,3 +19,8 @@ export const numericClass = "font-mono tabular-nums";
 
 export const linkClass =
   "cursor-pointer text-foreground/50 underline decoration-foreground/20 underline-offset-4 transition-colors hover:text-foreground hover:decoration-foreground";
+
+// Same look as linkClass, but with a larger tap target for the small inline
+// actions packed into settings rows (edit/delete/pay/move) — the padding is
+// offset by a matching negative margin so it doesn't shift surrounding layout.
+export const actionLinkClass = `${linkClass} -m-1.5 p-1.5`;

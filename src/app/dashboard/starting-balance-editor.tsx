@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { updateStartingBalance } from "@/app/dashboard/actions";
-import { fieldClass, linkClass } from "@/lib/ui";
+import { fieldClass, actionLinkClass } from "@/lib/ui";
 import type { Dictionary } from "@/lib/i18n/dictionary";
 
 export function StartingBalanceEditor({
@@ -20,7 +20,7 @@ export function StartingBalanceEditor({
 
   if (!editing) {
     return (
-      <button type="button" onClick={() => setEditing(true)} className={`${linkClass} text-xs`}>
+      <button type="button" onClick={() => setEditing(true)} className={`${actionLinkClass} text-xs`}>
         {t.editLink}
       </button>
     );
@@ -43,10 +43,10 @@ export function StartingBalanceEditor({
         autoFocus
         className={`${fieldClass} w-28`}
       />
-      <button type="submit" className={`${linkClass} text-xs font-medium`}>
+      <button type="submit" className={`${actionLinkClass} text-xs font-medium`}>
         {common.save}
       </button>
-      <button type="button" onClick={() => setEditing(false)} className={`${linkClass} text-xs`}>
+      <button type="button" onClick={() => setEditing(false)} className={`${actionLinkClass} text-xs`}>
         {common.cancel}
       </button>
     </form>

@@ -34,7 +34,7 @@ export default async function HistoryPage({
   const months = groupByMonth(rows, locale);
 
   return (
-    <main className="flex flex-1 flex-col px-4 pb-24 pt-8 sm:py-12">
+    <main className="flex flex-1 flex-col px-4 pb-24 pt-[calc(env(safe-area-inset-top)+2rem)] sm:pt-12 sm:pb-24">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-3">

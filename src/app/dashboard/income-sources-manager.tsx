@@ -17,6 +17,7 @@ import {
   btnPositiveClass,
   btnDestructiveClass,
   linkClass,
+  actionLinkClass,
   numericClass,
 } from "@/lib/ui";
 import type { Dictionary } from "@/lib/i18n/dictionary";
@@ -130,19 +131,20 @@ function SourceRow({
   const accountName = account ? accountDisplayName(account, t.common.mainAccount) : "";
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-foreground/5 p-4 last:border-0">
-      <div className="min-w-0">
-        <p className="truncate text-sm font-medium">{source.name}</p>
-        <p className="mt-0.5 truncate text-xs text-foreground/50">
-          {scheduleBadge} · {categoryName} · {accountName}
-        </p>
+    <div className="border-b border-foreground/5 p-4 last:border-0">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium">{source.name}</p>
+          <p className="mt-0.5 truncate text-xs text-foreground/50">
+            {scheduleBadge} · {categoryName} · {accountName}
+          </p>
+        </div>
+        {source.expected_amount != null && (
+          <p className={`shrink-0 text-sm ${numericClass}`}>{formatCurrency(source.expected_amount, currency, locale)}</p>
+        )}
       </div>
 
-      <div className="flex shrink-0 flex-wrap items-center gap-3">
-        {source.expected_amount != null && (
-          <p className={`text-sm ${numericClass}`}>{formatCurrency(source.expected_amount, currency, locale)}</p>
-        )}
-
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
         <form action={updateIncomeSource} onChange={(e) => e.currentTarget.requestSubmit()}>
           <input type="hidden" name="id" value={source.id} />
           <input type="hidden" name="name" value={source.name} />
@@ -152,7 +154,7 @@ function SourceRow({
           <input type="hidden" name="expectedAmount" value={source.expected_amount ?? ""} />
           <input type="hidden" name="accountId" value={source.account_id} />
           <input type="hidden" name="categoryId" value={source.category_id ?? ""} />
-          <label className="flex items-center gap-1.5 text-xs text-foreground/50">
+          <label className="flex items-center gap-1.5 text-foreground/50">
             <input
               type="checkbox"
               name="isActive"
@@ -163,24 +165,22 @@ function SourceRow({
           </label>
         </form>
 
-        <div className="flex items-center gap-3 text-xs">
-          {received ? (
-            <span className="text-emerald-500">{t.incomeSources.receivedThisMonth}</span>
-          ) : (
-            <ReceiveButton
-              source={source}
-              accounts={accounts}
-              allocationRules={allocationRules}
-              currency={currency}
-              locale={locale}
-              t={t}
-            />
-          )}
-          <button type="button" onClick={() => setEditing(true)} className={linkClass}>
-            {t.common.edit}
-          </button>
-          <DeleteSourceButton source={source} t={t} />
-        </div>
+        {received ? (
+          <span className="text-emerald-500">{t.incomeSources.receivedThisMonth}</span>
+        ) : (
+          <ReceiveButton
+            source={source}
+            accounts={accounts}
+            allocationRules={allocationRules}
+            currency={currency}
+            locale={locale}
+            t={t}
+          />
+        )}
+        <button type="button" onClick={() => setEditing(true)} className={actionLinkClass}>
+          {t.common.edit}
+        </button>
+        <DeleteSourceButton source={source} t={t} />
       </div>
     </div>
   );
@@ -219,7 +219,7 @@ function ReceiveButton({
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className={linkClass}>
+      <button type="button" onClick={() => setOpen(true)} className={actionLinkClass}>
         {t.incomeSources.markAsReceived}
       </button>
 
@@ -321,7 +321,7 @@ function DeleteSourceButton({ source, t }: { source: IncomeSource; t: Dictionary
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className={`${linkClass} hover:text-red-400`}>
+      <button type="button" onClick={() => setOpen(true)} className={`${actionLinkClass} hover:text-red-400`}>
         {t.common.delete}
       </button>
 

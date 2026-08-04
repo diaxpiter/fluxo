@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { updateTransaction, deleteTransaction } from "@/app/dashboard/actions";
 import { formatCurrency } from "@/lib/currency";
-import { cardClass, fieldClass, btnPrimaryClass, btnGhostClass, btnDestructiveClass, linkClass, numericClass } from "@/lib/ui";
+import { cardClass, fieldClass, btnPrimaryClass, btnGhostClass, btnDestructiveClass, linkClass, actionLinkClass, numericClass } from "@/lib/ui";
 import type { Dictionary } from "@/lib/i18n/dictionary";
 import { format } from "@/lib/i18n/format";
 import { categoryDisplayName } from "@/lib/dashboard-data";
@@ -83,7 +83,7 @@ export function TransactionList({
                 </div>
               </div>
               <div className="mt-2 flex items-center gap-4">
-                <button type="button" onClick={() => setEditingId(row.id)} className={`${linkClass} text-xs`}>
+                <button type="button" onClick={() => setEditingId(row.id)} className={`${actionLinkClass} text-xs`}>
                   {common.edit}
                 </button>
                 <DeleteButton
@@ -198,7 +198,7 @@ function DeleteButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={`${linkClass} text-xs hover:text-red-400`}
+        className={`${actionLinkClass} text-xs hover:text-red-400`}
       >
         {common.delete}
       </button>

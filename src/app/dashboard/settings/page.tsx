@@ -38,7 +38,7 @@ export default async function SettingsPage() {
   const balances = computeAccountBalances(accounts, transactions);
 
   return (
-    <main className="flex flex-1 flex-col px-4 pb-24 pt-8 sm:py-12">
+    <main className="flex flex-1 flex-col px-4 pb-24 pt-[calc(env(safe-area-inset-top)+2rem)] sm:pt-12 sm:pb-24">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
         <h1 className="text-xl font-semibold tracking-tight">{t.settings.title}</h1>
 
