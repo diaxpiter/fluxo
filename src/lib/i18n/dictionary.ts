@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import type { WidgetKey } from "@/lib/widgets";
 import type { AccountType } from "@/lib/types";
+import type { PresetBillKey } from "@/lib/onboarding";
 import { DEFAULT_LOCALE, LOCALE_COOKIE, isLocale, type Locale } from "@/lib/i18n/locales";
 import { en_US } from "@/lib/i18n/dictionaries/en-US";
 import { pt_BR } from "@/lib/i18n/dictionaries/pt-BR";
@@ -192,6 +193,65 @@ export type Dictionary = {
     /** Placeholders: {count}, {balance} */
     summary: string;
     done: string;
+  };
+  onboarding: {
+    /** Placeholders: {current}, {total} */
+    stepIndicator: string;
+    back: string;
+    next: string;
+    welcomeStep: {
+      /** This locale's own word for "Welcome" -- also read directly off all three dictionaries at once for the pulsing multi-language greeting, before a language is chosen. */
+      greetingWord: string;
+      languageLabel: string;
+    };
+    accountsStep: {
+      heading: string;
+      helpText: string;
+      addAccountButton: string;
+      removeAccountLabel: string;
+    };
+    incomeStep: {
+      heading: string;
+      helpText: string;
+      startButton: string;
+      skipButton: string;
+    };
+    billsStep: {
+      heading: string;
+      helpText: string;
+      presetBills: Record<PresetBillKey, string>;
+      addCustomButton: string;
+      customNameLabel: string;
+      categoryLabel: string;
+      removeBillLabel: string;
+    };
+    setAsidesStep: {
+      heading: string;
+      helpText: string;
+      sinkingFundHint: string;
+      nameLabel: string;
+      addSetAsideButton: string;
+      removeSetAsideLabel: string;
+    };
+    reviewStep: {
+      heading: string;
+      helpText: string;
+      overviewQuestion: string;
+      singleBalanceOption: string;
+      freeToSpendOption: string;
+      accountsHeading: string;
+      incomeHeading: string;
+      billsHeading: string;
+      setAsidesHeading: string;
+      noIncome: string;
+      noBills: string;
+      noSetAsides: string;
+      /** Placeholders: {amount}, {account} */
+      allocationLine: string;
+      /** Placeholders: {amount}, {account} */
+      remainderLine: string;
+      confirmButton: string;
+    };
   };
   auth: {
     login: {

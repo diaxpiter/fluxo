@@ -60,7 +60,7 @@ export async function signup(formData: FormData) {
     await supabase.from("profiles").update({ language }).eq("id", data.user.id);
   }
 
-  redirect("/dashboard");
+  redirect("/onboarding");
 }
 
 export async function logout() {
