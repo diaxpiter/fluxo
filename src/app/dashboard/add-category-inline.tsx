@@ -3,14 +3,20 @@
 import { useRef, useState } from "react";
 import { addCategory } from "@/app/dashboard/actions";
 import { fieldClass, linkClass } from "@/lib/ui";
+import { notify } from "@/lib/toast";
 import type { Dictionary } from "@/lib/i18n/dictionary";
+import type { Category } from "@/lib/types";
 
 export function AddCategoryInline({
   t,
   common,
+  onCreated,
 }: {
   t: Dictionary["addCategory"];
   common: Dictionary["common"];
+  /** Called with the newly created category so the caller can select it immediately -- it's already
+   * persisted and available to every other transaction/bill/income form from this point on. */
+  onCreated: (category: Category) => void;
 }) {
   const [open, setOpen] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
@@ -27,7 +33,11 @@ export function AddCategoryInline({
     <form
       ref={formRef}
       action={async (formData) => {
-        await addCategory(formData);
+        const category = await addCategory(formData);
+        if (category) {
+          onCreated(category);
+          notify(common.savedToast);
+        }
         formRef.current?.reset();
         setOpen(false);
       }}

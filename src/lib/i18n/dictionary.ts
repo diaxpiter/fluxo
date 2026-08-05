@@ -22,6 +22,8 @@ export type Dictionary = {
     settingUpAccount: string;
     mainAccount: string;
     account: string;
+    savedToast: string;
+    deletedToast: string;
   };
   /** Labels for the literal English category names the signup trigger seeds every account with. */
   categories: {
@@ -39,9 +41,12 @@ export type Dictionary = {
     overview: string;
     recentActivity: string;
     viewAll: string;
+    hideAmountsLabel: string;
+    showAmountsLabel: string;
   };
   history: {
     title: string;
+    monthColumn: string;
   };
   settings: {
     title: string;
@@ -132,6 +137,22 @@ export type Dictionary = {
     paidThisMonth: string;
     /** Placeholder: {day} */
     dueDayBadge: string;
+    frequencyLabel: string;
+    monthlyLabel: string;
+    weeklyLabel: string;
+    biweeklyLabel: string;
+    yearlyLabel: string;
+    dayOfWeekLabel: string;
+    monthLabel: string;
+    startingFromLabel: string;
+    /** Placeholder: {day} */
+    dueWeeklyBadge: string;
+    /** Placeholder: {day} */
+    dueBiweeklyBadge: string;
+    /** Placeholders: {month}, {day} */
+    dueYearlyBadge: string;
+    /** Placeholders: {paid}, {total} */
+    paidCountBadge: string;
     deleteTitle: string;
     /** Placeholder: {name} */
     deleteBody: string;
@@ -149,6 +170,8 @@ export type Dictionary = {
     weekendShiftEarlier: string;
     weekendShiftLater: string;
     expectedAmountLabel: string;
+    estimatedAmountLabel: string;
+    variableAmountLabel: string;
     addButton: string;
     markAsReceived: string;
     receivedThisMonth: string;
@@ -179,6 +202,20 @@ export type Dictionary = {
   addCategory: {
     newCategory: string;
     namePlaceholder: string;
+  };
+  spaces: {
+    switcherLabel: string;
+    heading: string;
+    description: string;
+    closeLabel: string;
+    addButton: string;
+    nameLabel: string;
+    namePlaceholder: string;
+    colorLabel: string;
+    deleteTitle: string;
+    /** Placeholder: {name} */
+    deleteBody: string;
+    lastSpaceError: string;
   };
   importTransactions: {
     linkText: string;

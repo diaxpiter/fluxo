@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { transferBetweenAccounts } from "@/app/dashboard/actions";
 import { accountDisplayName } from "@/lib/dashboard-data";
 import { fieldClass, btnPrimaryClass, linkClass } from "@/lib/ui";
+import { notify } from "@/lib/toast";
 import type { Dictionary } from "@/lib/i18n/dictionary";
 import type { Account } from "@/lib/types";
 
@@ -61,6 +62,7 @@ export function TransferButton({ accounts, t }: { accounts: Account[]; t: Dictio
                 startTransition(async () => {
                   const result = await transferBetweenAccounts(formData);
                   if (result.ok) {
+                    notify(t.common.savedToast);
                     close();
                   } else {
                     setError(result.error);

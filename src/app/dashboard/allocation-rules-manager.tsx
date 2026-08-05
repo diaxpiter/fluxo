@@ -20,6 +20,7 @@ import {
 } from "@/lib/ui";
 import type { Dictionary } from "@/lib/i18n/dictionary";
 import { accountDisplayName } from "@/lib/dashboard-data";
+import { notify } from "@/lib/toast";
 import type { Account, AllocationMethod, AllocationRule } from "@/lib/types";
 
 export function AllocationRulesManager({
@@ -160,7 +161,13 @@ function RuleRow({
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
-        <form action={updateAllocationRule} onChange={(e) => e.currentTarget.requestSubmit()}>
+        <form
+          action={async (formData) => {
+            await updateAllocationRule(formData);
+            notify(t.common.savedToast);
+          }}
+          onChange={(e) => e.currentTarget.requestSubmit()}
+        >
           <input type="hidden" name="id" value={rule.id} />
           <input type="hidden" name="targetAccountId" value={rule.target_account_id} />
           <input type="hidden" name="method" value={rule.method} />
@@ -240,7 +247,12 @@ function DeleteRuleButton({
               <button type="button" onClick={() => setOpen(false)} className={btnGhostClass}>
                 {t.common.cancel}
               </button>
-              <form action={deleteAllocationRule}>
+              <form
+                action={async (formData) => {
+                  await deleteAllocationRule(formData);
+                  notify(t.common.deletedToast);
+                }}
+              >
                 <input type="hidden" name="id" value={rule.id} />
                 <button type="submit" className={`${btnDestructiveClass} w-full`}>
                   {t.common.delete}
@@ -272,6 +284,7 @@ function RuleForm({
     <form
       action={async (formData) => {
         await action(formData);
+        notify(t.common.savedToast);
         onDone();
       }}
       className={`${cardClass} flex flex-col gap-3 p-4`}

@@ -8,9 +8,19 @@ export type AccountType =
   | "cash"
   | "other";
 
+export type Space = {
+  id: string;
+  user_id: string;
+  name: string;
+  color: string;
+  widgets: unknown;
+  created_at: string;
+};
+
 export type Account = {
   id: string;
   user_id: string;
+  space_id: string;
   name: string;
   type: AccountType;
   starting_balance: number;
@@ -22,6 +32,7 @@ export type Account = {
 export type Category = {
   id: string;
   user_id: string;
+  space_id: string;
   name: string;
   kind: string;
   created_at: string;
@@ -42,16 +53,23 @@ export type Transaction = {
   created_at: string;
 };
 
+export type BillRecurrenceType = "monthly" | "weekly" | "biweekly" | "yearly";
+
 export type RecurringBill = {
   id: string;
   user_id: string;
+  space_id: string;
   account_id: string;
   category_id: string | null;
   name: string;
   is_variable: boolean;
   amount: number | null;
   estimated_amount: number | null;
-  due_day_of_month: number;
+  recurrence_type: BillRecurrenceType;
+  due_day_of_month: number | null;
+  due_day_of_week: number | null;
+  due_month: number | null;
+  anchor_date: string | null;
   is_active: boolean;
   created_at: string;
 };
@@ -62,6 +80,7 @@ export type WeekendHolidayRule = "shift_earlier" | "shift_later" | "none";
 export type IncomeSource = {
   id: string;
   user_id: string;
+  space_id: string;
   account_id: string;
   category_id: string | null;
   name: string;
@@ -69,6 +88,8 @@ export type IncomeSource = {
   day_of_month: number | null;
   weekend_holiday_rule: WeekendHolidayRule;
   expected_amount: number | null;
+  is_variable: boolean;
+  estimated_amount: number | null;
   is_active: boolean;
   created_at: string;
 };
@@ -78,6 +99,7 @@ export type AllocationMethod = "fixed_amount" | "percentage" | "remainder";
 export type AllocationRule = {
   id: string;
   user_id: string;
+  space_id: string;
   target_account_id: string;
   priority_order: number;
   method: AllocationMethod;

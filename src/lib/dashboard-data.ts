@@ -1,61 +1,69 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { monthBoundsYmd, normalizeWidgetPrefs, todayYmd, type WidgetPref } from "@/lib/widgets";
 import type { Dictionary } from "@/lib/i18n/dictionary";
-import type { Account, AllocationRule, Category, IncomeSource, RecurringBill, Transaction } from "@/lib/types";
+import type { Account, AllocationRule, Category, IncomeSource, RecurringBill, Space, Transaction } from "@/lib/types";
 
-type ProfileRow = { currency: string | null; widgets: WidgetPref[] | null } | null;
+type ProfileRow = { currency: string | null } | null;
 
 /**
- * `profile` is passed in (rather than queried here) so callers can fetch it via the cached
- * `getProfile` in `@/lib/supabase/server` -- shared with the layout's own profile lookup -- while
+ * `profile` and `space` are passed in (rather than queried here) so callers can fetch them via
+ * the cached `getProfile` / `getCurrentSpace` -- shared with the layout's own lookups -- while
  * keeping this file free of server-only imports, since it's also imported by client components.
+ * Every table here is scoped to `space.id`: each space is a fully separate ledger.
  */
 export async function getDashboardContext(
   supabase: SupabaseClient,
   userId: string,
   profile: ProfileRow | Promise<ProfileRow>,
+  space: Space | Promise<Space>,
 ) {
+  const [resolvedProfile, resolvedSpace] = await Promise.all([profile, space]);
+  const spaceId = resolvedSpace.id;
+
   const [
-    resolvedProfile,
     { data: accounts },
     { data: categories },
     { data: recurringBills },
     { data: incomeSources },
     { data: allocationRules },
   ] = await Promise.all([
-    profile,
     supabase
       .from("accounts")
       .select("*")
       .eq("user_id", userId)
+      .eq("space_id", spaceId)
       .eq("is_archived", false)
       .order("created_at", { ascending: true }),
     supabase
       .from("categories")
       .select("*")
       .eq("user_id", userId)
+      .eq("space_id", spaceId)
       .order("created_at", { ascending: true }),
     supabase
       .from("recurring_bills")
       .select("*")
       .eq("user_id", userId)
+      .eq("space_id", spaceId)
       .order("created_at", { ascending: true }),
     supabase
       .from("income_sources")
       .select("*")
       .eq("user_id", userId)
+      .eq("space_id", spaceId)
       .order("created_at", { ascending: true }),
     supabase
       .from("allocation_rules")
       .select("*")
       .eq("user_id", userId)
+      .eq("space_id", spaceId)
       .order("priority_order", { ascending: true }),
   ]);
 
   const accountList = (accounts as Account[] | null) ?? [];
   const currency = resolvedProfile?.currency ?? "EUR";
   const categoryList = (categories as Category[] | null) ?? [];
-  const widgetPrefs = normalizeWidgetPrefs(resolvedProfile?.widgets as WidgetPref[] | null);
+  const widgetPrefs = normalizeWidgetPrefs(resolvedSpace.widgets as WidgetPref[] | null);
   const recurringBillList = (recurringBills as RecurringBill[] | null) ?? [];
   const incomeSourceList = (incomeSources as IncomeSource[] | null) ?? [];
   const allocationRuleList = (allocationRules as AllocationRule[] | null) ?? [];

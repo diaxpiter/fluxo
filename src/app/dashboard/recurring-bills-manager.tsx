@@ -7,6 +7,7 @@ import {
   deleteRecurringBill,
   payRecurringBill,
 } from "@/app/dashboard/actions";
+import { CategorySelect } from "@/app/dashboard/category-select";
 import { formatCurrency } from "@/lib/currency";
 import { format } from "@/lib/i18n/format";
 import {
@@ -19,9 +20,22 @@ import {
   actionLinkClass,
   numericClass,
 } from "@/lib/ui";
+import { notify } from "@/lib/toast";
+import { billOccurrencesInMonth } from "@/lib/widgets";
 import type { Dictionary } from "@/lib/i18n/dictionary";
 import { accountDisplayName, categoryDisplayName } from "@/lib/dashboard-data";
-import type { Account, Category, RecurringBill } from "@/lib/types";
+import type { Account, BillRecurrenceType, Category, RecurringBill } from "@/lib/types";
+
+function weekdayNames(locale: string) {
+  const fmt = new Intl.DateTimeFormat(locale, { weekday: "long" });
+  // Jan 7 2024 was a Sunday, matching JS's getDay() convention (0 = Sunday).
+  return Array.from({ length: 7 }, (_, i) => fmt.format(new Date(2024, 0, 7 + i)));
+}
+
+function monthNames(locale: string) {
+  const fmt = new Intl.DateTimeFormat(locale, { month: "long" });
+  return Array.from({ length: 12 }, (_, i) => fmt.format(new Date(2024, i, 1)));
+}
 
 export function RecurringBillsManager({
   bills,
@@ -41,7 +55,6 @@ export function RecurringBillsManager({
   t: Dictionary;
 }) {
   const [adding, setAdding] = useState(false);
-  const paidSet = new Set(paidBillIds);
 
   const categoryName = (id: string | null) => {
     const category = categories.find((c) => c.id === id);
@@ -54,24 +67,29 @@ export function RecurringBillsManager({
         <p className="text-sm text-foreground/50">{t.recurringBills.empty}</p>
       ) : (
         <div className={cardClass}>
-          {bills.map((bill) => (
-            <BillRow
-              key={bill.id}
-              bill={bill}
-              paid={paidSet.has(bill.id)}
-              categoryName={categoryName(bill.category_id)}
-              categories={categories}
-              accounts={accounts}
-              currency={currency}
-              locale={locale}
-              t={t}
-            />
-          ))}
+          {bills.map((bill) => {
+            const totalThisMonth = billOccurrencesInMonth(bill).length;
+            const paidCount = paidBillIds.filter((id) => id === bill.id).length;
+            return (
+              <BillRow
+                key={bill.id}
+                bill={bill}
+                totalThisMonth={totalThisMonth}
+                paidCount={paidCount}
+                categoryName={categoryName(bill.category_id)}
+                categories={categories}
+                accounts={accounts}
+                currency={currency}
+                locale={locale}
+                t={t}
+              />
+            );
+          })}
         </div>
       )}
 
       {adding ? (
-        <BillForm categories={categories} accounts={accounts} t={t} onDone={() => setAdding(false)} />
+        <BillForm categories={categories} accounts={accounts} locale={locale} t={t} onDone={() => setAdding(false)} />
       ) : (
         <button type="button" onClick={() => setAdding(true)} className={`${linkClass} self-start text-xs`}>
           {t.recurringBills.addButton}
@@ -83,7 +101,8 @@ export function RecurringBillsManager({
 
 function BillRow({
   bill,
-  paid,
+  totalThisMonth,
+  paidCount,
   categoryName,
   categories,
   accounts,
@@ -92,7 +111,8 @@ function BillRow({
   t,
 }: {
   bill: RecurringBill;
-  paid: boolean;
+  totalThisMonth: number;
+  paidCount: number;
   categoryName: string;
   categories: Category[];
   accounts: Account[];
@@ -105,7 +125,14 @@ function BillRow({
   if (editing) {
     return (
       <div className="border-b border-foreground/5 bg-foreground/[0.03] p-4 last:border-0">
-        <BillForm bill={bill} categories={categories} accounts={accounts} t={t} onDone={() => setEditing(false)} />
+        <BillForm
+          bill={bill}
+          categories={categories}
+          accounts={accounts}
+          locale={locale}
+          t={t}
+          onDone={() => setEditing(false)}
+        />
       </div>
     );
   }
@@ -113,6 +140,20 @@ function BillRow({
   const amount = bill.is_variable ? bill.estimated_amount ?? 0 : bill.amount ?? 0;
   const account = accounts.find((a) => a.id === bill.account_id);
   const accountName = account ? accountDisplayName(account, t.common.mainAccount) : "";
+  const remaining = totalThisMonth - paidCount;
+  const fullyPaid = totalThisMonth > 0 && remaining <= 0;
+
+  const badgeText =
+    bill.recurrence_type === "weekly"
+      ? format(t.recurringBills.dueWeeklyBadge, { day: weekdayNames(locale)[bill.due_day_of_week ?? 0] })
+      : bill.recurrence_type === "biweekly"
+        ? format(t.recurringBills.dueBiweeklyBadge, { day: weekdayNames(locale)[bill.due_day_of_week ?? 0] })
+        : bill.recurrence_type === "yearly"
+          ? format(t.recurringBills.dueYearlyBadge, {
+              month: monthNames(locale)[(bill.due_month ?? 1) - 1],
+              day: bill.due_day_of_month ?? 1,
+            })
+          : format(t.recurringBills.dueDayBadge, { day: bill.due_day_of_month ?? 1 });
 
   return (
     <div className="border-b border-foreground/5 p-4 last:border-0">
@@ -120,7 +161,7 @@ function BillRow({
         <div className="min-w-0">
           <p className="truncate text-sm font-medium">{bill.name}</p>
           <p className="mt-0.5 truncate text-xs text-foreground/50">
-            {format(t.recurringBills.dueDayBadge, { day: bill.due_day_of_month })} · {categoryName} · {accountName}
+            {badgeText} · {categoryName} · {accountName}
           </p>
         </div>
         <p className={`shrink-0 text-sm ${numericClass}`}>
@@ -130,12 +171,22 @@ function BillRow({
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
-        <form action={updateRecurringBill} onChange={(e) => e.currentTarget.requestSubmit()}>
+        <form
+          action={async (formData) => {
+            await updateRecurringBill(formData);
+            notify(t.common.savedToast);
+          }}
+          onChange={(e) => e.currentTarget.requestSubmit()}
+        >
           <input type="hidden" name="id" value={bill.id} />
           <input type="hidden" name="name" value={bill.name} />
           <input type="hidden" name="isVariable" value={bill.is_variable ? "on" : ""} />
           <input type="hidden" name="amount" value={amount} />
-          <input type="hidden" name="dueDayOfMonth" value={bill.due_day_of_month} />
+          <input type="hidden" name="recurrenceType" value={bill.recurrence_type} />
+          <input type="hidden" name="dueDayOfMonth" value={bill.due_day_of_month ?? ""} />
+          <input type="hidden" name="dueDayOfWeek" value={bill.due_day_of_week ?? ""} />
+          <input type="hidden" name="dueMonth" value={bill.due_month ?? ""} />
+          <input type="hidden" name="anchorDate" value={bill.anchor_date ?? ""} />
           <input type="hidden" name="accountId" value={bill.account_id} />
           <input type="hidden" name="categoryId" value={bill.category_id ?? ""} />
           <label className="flex items-center gap-1.5 text-foreground/50">
@@ -149,11 +200,15 @@ function BillRow({
           </label>
         </form>
 
-        {paid ? (
-          <span className="text-emerald-500">{t.recurringBills.paidThisMonth}</span>
+        {totalThisMonth > 1 ? (
+          <span className={fullyPaid ? "text-emerald-500" : "text-foreground/50"}>
+            {format(t.recurringBills.paidCountBadge, { paid: paidCount, total: totalThisMonth })}
+          </span>
         ) : (
-          <PayButton bill={bill} t={t} />
+          fullyPaid && <span className="text-emerald-500">{t.recurringBills.paidThisMonth}</span>
         )}
+        {totalThisMonth > 0 && !fullyPaid && <PayButton bill={bill} t={t} />}
+
         <button type="button" onClick={() => setEditing(true)} className={actionLinkClass}>
           {t.common.edit}
         </button>
@@ -202,6 +257,7 @@ function PayButton({ bill, t }: { bill: RecurringBill; t: Dictionary }) {
               action={(formData) => {
                 startTransition(async () => {
                   await payRecurringBill(formData);
+                  notify(t.common.savedToast);
                   setOpen(false);
                 });
               }}
@@ -271,7 +327,12 @@ function DeleteBillButton({ bill, t }: { bill: RecurringBill; t: Dictionary }) {
               <button type="button" onClick={() => setOpen(false)} className={btnGhostClass}>
                 {t.common.cancel}
               </button>
-              <form action={deleteRecurringBill}>
+              <form
+                action={async (formData) => {
+                  await deleteRecurringBill(formData);
+                  notify(t.common.deletedToast);
+                }}
+              >
                 <input type="hidden" name="id" value={bill.id} />
                 <button type="submit" className={`${btnDestructiveClass} w-full`}>
                   {t.common.delete}
@@ -289,25 +350,30 @@ function BillForm({
   bill,
   categories,
   accounts,
+  locale,
   t,
   onDone,
 }: {
   bill?: RecurringBill;
   categories: Category[];
   accounts: Account[];
+  locale: string;
   t: Dictionary;
   onDone: () => void;
 }) {
   const [isVariable, setIsVariable] = useState(bill?.is_variable ?? false);
+  const [recurrenceType, setRecurrenceType] = useState<BillRecurrenceType>(bill?.recurrence_type ?? "monthly");
+  const today = new Date().toISOString().slice(0, 10);
   const action = bill ? updateRecurringBill : addRecurringBill;
 
   return (
     <form
       action={async (formData) => {
         await action(formData);
+        notify(t.common.savedToast);
         onDone();
       }}
-      className={`${cardClass} flex flex-col gap-3 p-4`}
+      className={`${cardClass} flex flex-col gap-4 p-4`}
     >
       {bill && <input type="hidden" name="id" value={bill.id} />}
 
@@ -316,7 +382,7 @@ function BillForm({
         <input type="text" name="name" required autoFocus defaultValue={bill?.name} className={fieldClass} />
       </div>
 
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
         <div className="flex flex-col gap-1.5">
           <label className="text-xs text-foreground/50">
             {isVariable ? t.recurringBills.estimatedAmountLabel : t.recurringBills.amountLabel}
@@ -328,11 +394,11 @@ function BillForm({
             min="0"
             required
             defaultValue={bill ? (bill.is_variable ? bill.estimated_amount ?? undefined : bill.amount ?? undefined) : undefined}
-            className={`${fieldClass} w-28`}
+            className={fieldClass}
           />
         </div>
 
-        <label className="flex items-center gap-1.5 pb-2 text-xs text-foreground/50">
+        <label className="flex items-center gap-1.5 pb-2 text-xs whitespace-nowrap text-foreground/50 sm:self-end">
           <input
             type="checkbox"
             name="isVariable"
@@ -342,22 +408,88 @@ function BillForm({
           />
           {t.recurringBills.variableAmountLabel}
         </label>
-
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs text-foreground/50">{t.recurringBills.dueDayLabel}</label>
-          <input
-            type="number"
-            name="dueDayOfMonth"
-            min={1}
-            max={31}
-            required
-            defaultValue={bill?.due_day_of_month ?? 1}
-            className={`${fieldClass} w-20`}
-          />
-        </div>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs text-foreground/50">{t.recurringBills.frequencyLabel}</label>
+          <select
+            name="recurrenceType"
+            value={recurrenceType}
+            onChange={(e) => setRecurrenceType(e.target.value as BillRecurrenceType)}
+            className={fieldClass}
+          >
+            <option value="monthly">{t.recurringBills.monthlyLabel}</option>
+            <option value="weekly">{t.recurringBills.weeklyLabel}</option>
+            <option value="biweekly">{t.recurringBills.biweeklyLabel}</option>
+            <option value="yearly">{t.recurringBills.yearlyLabel}</option>
+          </select>
+        </div>
+
+        {recurrenceType === "monthly" && (
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs text-foreground/50">{t.recurringBills.dueDayLabel}</label>
+            <input
+              type="number"
+              name="dueDayOfMonth"
+              min={1}
+              max={31}
+              required
+              defaultValue={bill?.due_day_of_month ?? 1}
+              className={fieldClass}
+            />
+          </div>
+        )}
+
+        {(recurrenceType === "weekly" || recurrenceType === "biweekly") && (
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs text-foreground/50">{t.recurringBills.dayOfWeekLabel}</label>
+            <select name="dueDayOfWeek" defaultValue={bill?.due_day_of_week ?? 1} className={fieldClass}>
+              {weekdayNames(locale).map((name, i) => (
+                <option key={i} value={i}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {recurrenceType === "yearly" && (
+          <>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-foreground/50">{t.recurringBills.monthLabel}</label>
+              <select name="dueMonth" defaultValue={bill?.due_month ?? 1} className={fieldClass}>
+                {monthNames(locale).map((name, i) => (
+                  <option key={i} value={i + 1}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-foreground/50">{t.recurringBills.dueDayLabel}</label>
+              <input
+                type="number"
+                name="dueDayOfMonth"
+                min={1}
+                max={31}
+                required
+                defaultValue={bill?.due_day_of_month ?? 1}
+                className={fieldClass}
+              />
+            </div>
+          </>
+        )}
+
+        {recurrenceType === "biweekly" && (
+          <div className="flex flex-col gap-1.5 sm:col-span-2">
+            <label className="text-xs text-foreground/50">{t.recurringBills.startingFromLabel}</label>
+            <input type="date" name="anchorDate" required defaultValue={bill?.anchor_date ?? today} className={fieldClass} />
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <label className="text-xs text-foreground/50">{t.common.account}</label>
           <select name="accountId" defaultValue={bill?.account_id ?? accounts[0]?.id} className={fieldClass}>
@@ -371,26 +503,25 @@ function BillForm({
 
         <div className="flex flex-col gap-1.5">
           <label className="text-xs text-foreground/50">{t.addTransaction.categoryLabel}</label>
-          <select name="categoryId" defaultValue={bill?.category_id ?? ""} className={fieldClass}>
-            <option value="">{t.common.uncategorized}</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {categoryDisplayName(c, t.categories)}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <label className="flex items-center gap-1.5 pb-2 text-xs text-foreground/50">
-          <input
-            type="checkbox"
-            name="isActive"
-            defaultChecked={bill?.is_active ?? true}
-            className="h-3.5 w-3.5 cursor-pointer rounded border-foreground/30 accent-emerald-500"
+          <CategorySelect
+            categories={categories}
+            defaultValue={bill?.category_id}
+            categoryLabels={t.categories}
+            addCategoryT={t.addCategory}
+            common={t.common}
           />
-          {t.recurringBills.activeLabel}
-        </label>
+        </div>
       </div>
+
+      <label className="flex items-center gap-1.5 text-xs text-foreground/50">
+        <input
+          type="checkbox"
+          name="isActive"
+          defaultChecked={bill?.is_active ?? true}
+          className="h-3.5 w-3.5 cursor-pointer rounded border-foreground/30 accent-emerald-500"
+        />
+        {t.recurringBills.activeLabel}
+      </label>
 
       <div className="mt-1 flex items-center gap-4">
         <button type="submit" className={`${btnPrimaryClass} px-3 py-1.5 text-xs`}>

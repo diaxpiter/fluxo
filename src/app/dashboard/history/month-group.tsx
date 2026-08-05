@@ -20,6 +20,7 @@ export function MonthGroup({
   t,
   common,
   categoryLabels,
+  addCategoryT,
   defaultOpen = false,
 }: {
   label: string;
@@ -33,6 +34,7 @@ export function MonthGroup({
   t: Dictionary["transactionList"];
   common: Dictionary["common"];
   categoryLabels: Dictionary["categories"];
+  addCategoryT: Dictionary["addCategory"];
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -42,13 +44,17 @@ export function MonthGroup({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`${cardClass} flex w-full flex-wrap items-center justify-between gap-3 p-4 text-left transition-colors duration-150 hover:bg-foreground/[0.06]`}
+        className={`${cardClass} grid w-full grid-cols-[1fr_6rem_6rem_6rem] items-center gap-3 p-4 text-left transition-colors duration-150 hover:bg-foreground/[0.06]`}
       >
-        <span className="text-sm font-medium">{label}</span>
-        <span className={`flex items-center gap-3 text-xs ${numericClass}`}>
-          <span className="text-emerald-500">+{formatCurrency(moneyIn, currency, locale)}</span>
-          <span className="text-red-400">-{formatCurrency(moneyOut, currency, locale)}</span>
-          <span className="font-medium text-foreground">{formatCurrency(finalBalance, currency, locale)}</span>
+        <span className="truncate text-sm font-medium">{label}</span>
+        <span className={`whitespace-nowrap text-right text-xs text-emerald-500 ${numericClass}`}>
+          +{formatCurrency(moneyIn, currency, locale)}
+        </span>
+        <span className={`whitespace-nowrap text-right text-xs text-red-400 ${numericClass}`}>
+          -{formatCurrency(moneyOut, currency, locale)}
+        </span>
+        <span className={`whitespace-nowrap text-right text-xs font-medium text-foreground ${numericClass}`}>
+          {formatCurrency(finalBalance, currency, locale)}
         </span>
       </button>
 
@@ -62,6 +68,7 @@ export function MonthGroup({
             t={t}
             common={common}
             categoryLabels={categoryLabels}
+            addCategoryT={addCategoryT}
           />
         </div>
       )}

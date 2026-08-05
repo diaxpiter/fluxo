@@ -5,6 +5,8 @@ import { RecentActivityList } from "@/app/dashboard/recent-activity-list";
 import { WidgetCard } from "@/app/dashboard/widget-card";
 import { TransferButton } from "@/app/dashboard/transfer-button";
 import { AddTransactionFab } from "@/app/dashboard/add-transaction-fab";
+import { SpaceSwitcher } from "@/app/dashboard/space-switcher";
+import { PrivacyProvider, PrivacyToggle, SensitiveValue } from "@/components/privacy";
 import { formatCurrency } from "@/lib/currency";
 import { cardClass, linkClass, numericClass } from "@/lib/ui";
 import {
@@ -13,6 +15,7 @@ import {
   getDashboardContext,
   getTransactionsForAccounts,
 } from "@/lib/dashboard-data";
+import { getCurrentSpace } from "@/lib/spaces";
 import { getDictionary, getLocale } from "@/lib/i18n/dictionary";
 import { format } from "@/lib/i18n/format";
 import { computeWidgetValues, layoutRows, todayYmd, type WidgetKey } from "@/lib/widgets";
@@ -50,10 +53,13 @@ export default async function DashboardPage() {
   const displayName = (user.user_metadata?.display_name as string) || user.email;
   const firstName = displayName?.split(" ")[0];
 
+  const { spaces, currentSpace } = await getCurrentSpace(supabase, user.id);
+
   const { accounts, categories, currency, widgetPrefs, recurringBills, incomeSources } = await getDashboardContext(
     supabase,
     user.id,
     getProfile(user.id),
+    currentSpace,
   );
   const transactions = await getTransactionsForAccounts(supabase, accounts.map((a) => a.id));
   const balances = computeAccountBalances(accounts, transactions);
@@ -79,16 +85,21 @@ export default async function DashboardPage() {
     .reverse();
 
   return (
+    <PrivacyProvider>
     <main className="flex flex-1 flex-col px-4 pb-24 pt-[calc(env(safe-area-inset-top)+2rem)] sm:pt-12 sm:pb-24">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-        <div className="min-w-0">
-          <p className="text-sm font-medium tracking-tight text-foreground/50">
-            <span className="text-emerald-500">.</span>fluxo
-          </p>
-          <h1 className="mt-2 truncate text-xl font-semibold tracking-tight">
-            {format(t.home.greeting, { firstName: firstName ?? "" })}
-          </h1>
-          <p className="mt-0.5 truncate text-sm text-foreground/50">{user.email}</p>
+        <div className="flex items-start gap-3">
+          <SpaceSwitcher spaces={spaces} currentSpace={currentSpace} t={t.spaces} common={t.common} />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium tracking-tight text-foreground/50">
+              <span className="text-emerald-500">.</span>fluxo
+            </p>
+            <h1 className="mt-2 truncate text-xl font-semibold tracking-tight">
+              {format(t.home.greeting, { firstName: firstName ?? "" })}
+            </h1>
+            <p className="mt-0.5 truncate text-sm text-foreground/50">{user.email}</p>
+          </div>
+          <PrivacyToggle label={t.home.hideAmountsLabel} revealLabel={t.home.showAmountsLabel} />
         </div>
 
         {accounts.length === 0 ? (
@@ -113,14 +124,16 @@ export default async function DashboardPage() {
                         {accountDisplayName(account, t.common.mainAccount)}
                       </p>
                       <p className={`text-sm font-medium ${numericClass}`}>
-                        {formatCurrency(balances.get(account.id) ?? account.starting_balance, currency, locale)}
+                        <SensitiveValue>
+                          {formatCurrency(balances.get(account.id) ?? account.starting_balance, currency, locale)}
+                        </SensitiveValue>
                       </p>
                     </div>
                   ))}
                   <div className="flex items-center justify-between gap-3 bg-foreground/[0.03] p-4">
                     <p className="text-sm font-medium text-foreground/70">{t.accounts.totalLabel}</p>
                     <p className={`text-sm font-semibold ${numericClass}`}>
-                      {formatCurrency(widgetValues.currentBalance, currency, locale)}
+                      <SensitiveValue>{formatCurrency(widgetValues.currentBalance, currency, locale)}</SensitiveValue>
                     </p>
                   </div>
                 </div>
@@ -162,6 +175,7 @@ export default async function DashboardPage() {
                 t={t.transactionList}
                 common={t.common}
                 categoryLabels={t.categories}
+                addCategoryT={t.addCategory}
               />
             </div>
           </>
@@ -180,5 +194,6 @@ export default async function DashboardPage() {
         />
       )}
     </main>
+    </PrivacyProvider>
   );
 }

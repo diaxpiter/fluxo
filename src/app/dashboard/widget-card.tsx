@@ -1,4 +1,5 @@
 import { cardClass, numericClass } from "@/lib/ui";
+import { SensitiveValue } from "@/components/privacy";
 
 export function WidgetCard({
   title,
@@ -20,7 +21,9 @@ export function WidgetCard({
       style={{ animationDelay: `${delayMs}ms` }}
     >
       <p className="text-xs text-foreground/50">{title}</p>
-      <p className={`text-xl font-semibold tracking-tight ${numericClass} ${valueColor}`}>{value}</p>
+      <p className={`text-xl font-semibold tracking-tight ${numericClass} ${valueColor}`}>
+        <SensitiveValue>{value}</SensitiveValue>
+      </p>
     </div>
   );
 }

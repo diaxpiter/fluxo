@@ -5,8 +5,10 @@ import { ImportTransactions } from "@/app/dashboard/import-transactions";
 import { TransactionList } from "@/app/dashboard/transaction-list";
 import { MonthGroup } from "@/app/dashboard/history/month-group";
 import { AccountSwitcher } from "@/app/dashboard/history/account-switcher";
+import { SpaceSwitcher } from "@/app/dashboard/space-switcher";
 import { cardClass } from "@/lib/ui";
 import { getDashboardContext, getLedgerRows, groupByMonth } from "@/lib/dashboard-data";
+import { getCurrentSpace } from "@/lib/spaces";
 import { getDictionary, getLocale } from "@/lib/i18n/dictionary";
 
 export default async function HistoryPage({
@@ -24,8 +26,10 @@ export default async function HistoryPage({
   const locale = await getLocale();
   const t = getDictionary(locale);
 
+  const { spaces, currentSpace } = await getCurrentSpace(supabase, user.id);
+
   const [{ accounts, categories, currency }, { account: requestedAccountId }] = await Promise.all([
-    getDashboardContext(supabase, user.id, getProfile(user.id)),
+    getDashboardContext(supabase, user.id, getProfile(user.id), currentSpace),
     searchParams,
   ]);
   const account = accounts.find((a) => a.id === requestedAccountId) ?? accounts[0] ?? null;
@@ -38,6 +42,7 @@ export default async function HistoryPage({
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-3">
+            <SpaceSwitcher spaces={spaces} currentSpace={currentSpace} t={t.spaces} common={t.common} />
             <h1 className="text-xl font-semibold tracking-tight">{t.history.title}</h1>
             {account && <AccountSwitcher accounts={accounts} selectedId={account.id} t={t.common} />}
           </div>
@@ -57,9 +62,16 @@ export default async function HistoryPage({
             t={t.transactionList}
             common={t.common}
             categoryLabels={t.categories}
+            addCategoryT={t.addCategory}
           />
         ) : (
           <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-[1fr_6rem_6rem_6rem] gap-3 px-4 text-xs font-medium text-foreground/50">
+              <span>{t.history.monthColumn}</span>
+              <span className="text-right">{t.transactionList.moneyIn}</span>
+              <span className="text-right">{t.transactionList.moneyOut}</span>
+              <span className="text-right">{t.transactionList.balance}</span>
+            </div>
             {months.map((month, i) => (
               <MonthGroup
                 key={month.key}
@@ -74,6 +86,7 @@ export default async function HistoryPage({
                 t={t.transactionList}
                 common={t.common}
                 categoryLabels={t.categories}
+                addCategoryT={t.addCategory}
                 defaultOpen={i === 0}
               />
             ))}

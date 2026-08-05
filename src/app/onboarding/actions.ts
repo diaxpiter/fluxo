@@ -35,6 +35,10 @@ export async function completeOnboarding(formData: FormData) {
     return;
   }
 
+  // The signup trigger already created exactly one space for this brand-new user.
+  const { data: space } = await supabase.from("spaces").select("id").eq("user_id", user.id).single();
+  const spaceId = space!.id;
+
   const { data: categories } = await supabase.from("categories").select("*").eq("user_id", user.id);
   const categoryList = (categories as Category[] | null) ?? [];
   const categoryIdFor = (key: PresetBillCategoryKey) =>
@@ -56,6 +60,7 @@ export async function completeOnboarding(formData: FormData) {
     await supabase.from("accounts").insert(
       extraDayToDay.map((a) => ({
         user_id: user.id,
+        space_id: spaceId,
         name: a.name?.trim() || "Account",
         type: "checking",
         starting_balance: Number(a.startingBalance) || 0,
@@ -69,6 +74,7 @@ export async function completeOnboarding(formData: FormData) {
     const dayOfMonth = clampDayOfMonth(answers.income.dayOfMonth);
     await supabase.from("income_sources").insert({
       user_id: user.id,
+      space_id: spaceId,
       account_id: mainAccountId,
       category_id: null,
       name: answers.income.name?.trim() || "Income",
@@ -85,6 +91,7 @@ export async function completeOnboarding(formData: FormData) {
     await supabase.from("recurring_bills").insert(
       answers.bills.map((bill) => ({
         user_id: user.id,
+        space_id: spaceId,
         account_id: mainAccountId,
         category_id: categoryIdFor(bill.categoryKey),
         name: bill.name?.trim() || "Bill",
@@ -105,6 +112,7 @@ export async function completeOnboarding(formData: FormData) {
       .insert(
         ordered.map((row) => ({
           user_id: user.id,
+          space_id: spaceId,
           name: row.name?.trim() || row.type,
           type: row.type,
           starting_balance: 0,
@@ -117,6 +125,7 @@ export async function completeOnboarding(formData: FormData) {
       await supabase.from("allocation_rules").insert(
         ordered.map((row, i) => ({
           user_id: user.id,
+          space_id: spaceId,
           target_account_id: setAsideAccounts[i].id,
           priority_order: i,
           method: row.method,

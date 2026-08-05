@@ -5,6 +5,7 @@ import { addAccount, updateAccount, archiveAccount } from "@/app/dashboard/actio
 import { StartingBalanceEditor } from "@/app/dashboard/starting-balance-editor";
 import { formatCurrency } from "@/lib/currency";
 import { format } from "@/lib/i18n/format";
+import { notify } from "@/lib/toast";
 import {
   cardClass,
   fieldClass,
@@ -109,7 +110,13 @@ function AccountRow({
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
-        <form action={updateAccount} onChange={(e) => e.currentTarget.requestSubmit()}>
+        <form
+          action={async (formData) => {
+            await updateAccount(formData);
+            notify(t.common.savedToast);
+          }}
+          onChange={(e) => e.currentTarget.requestSubmit()}
+        >
           <input type="hidden" name="id" value={account.id} />
           <input type="hidden" name="name" value={account.name} />
           <input type="hidden" name="type" value={account.type} />
@@ -165,7 +172,12 @@ function ArchiveButton({ account, t }: { account: Account; t: Dictionary }) {
               <button type="button" onClick={() => setOpen(false)} className={btnGhostClass}>
                 {t.common.cancel}
               </button>
-              <form action={archiveAccount}>
+              <form
+                action={async (formData) => {
+                  await archiveAccount(formData);
+                  notify(t.common.deletedToast);
+                }}
+              >
                 <input type="hidden" name="id" value={account.id} />
                 <button type="submit" className={`${btnDestructiveClass} w-full`}>
                   {t.accounts.archiveButton}
@@ -186,6 +198,7 @@ function AccountForm({ account, t, onDone }: { account?: Account; t: Dictionary;
     <form
       action={async (formData) => {
         await action(formData);
+        notify(t.common.savedToast);
         onDone();
       }}
       className={`${cardClass} flex flex-col gap-3 p-4`}

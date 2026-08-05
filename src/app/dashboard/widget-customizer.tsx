@@ -6,6 +6,7 @@ import { btnPrimaryClass, actionLinkClass } from "@/lib/ui";
 import { type WidgetKey, type WidgetPref } from "@/lib/widgets";
 import type { Dictionary } from "@/lib/i18n/dictionary";
 import { format } from "@/lib/i18n/format";
+import { notify } from "@/lib/toast";
 
 export function WidgetCustomizer({
   widgets,
@@ -35,7 +36,13 @@ export function WidgetCustomizer({
   return (
     <div>
       <p className="mb-3 text-xs text-foreground/50">{t.helpText}</p>
-      <form action={updateWidgetPrefs} className="flex flex-col gap-1">
+      <form
+        action={async (formData) => {
+          await updateWidgetPrefs(formData);
+          notify(common.savedToast);
+        }}
+        className="flex flex-col gap-1"
+      >
         {order.map((key, i) => {
           const w = byKey.get(key);
           if (!w) return null;

@@ -67,13 +67,13 @@ export const getAuthenticatedUser = cache(async (): Promise<AuthenticatedUser | 
 
 /**
  * Deduped per-request: layouts and pages that both need the profile (onboarding_completed,
- * currency, widgets) share one query instead of each running their own.
+ * currency) share one query instead of each running their own.
  */
 export const getProfile = cache(async (userId: string) => {
   const supabase = await createClient();
   const { data } = await supabase
     .from("profiles")
-    .select("currency, widgets, onboarding_completed")
+    .select("currency, onboarding_completed")
     .eq("id", userId)
     .single();
   return data;

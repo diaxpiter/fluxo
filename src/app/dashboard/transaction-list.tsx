@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { updateTransaction, deleteTransaction } from "@/app/dashboard/actions";
+import { CategorySelect } from "@/app/dashboard/category-select";
 import { formatCurrency } from "@/lib/currency";
 import { cardClass, fieldClass, btnPrimaryClass, btnGhostClass, btnDestructiveClass, linkClass, actionLinkClass, numericClass } from "@/lib/ui";
 import type { Dictionary } from "@/lib/i18n/dictionary";
 import { format } from "@/lib/i18n/format";
 import { categoryDisplayName } from "@/lib/dashboard-data";
+import { notify } from "@/lib/toast";
 import type { Category } from "@/lib/types";
 
 type Row = {
@@ -26,6 +28,7 @@ export function TransactionList({
   t,
   common,
   categoryLabels,
+  addCategoryT,
 }: {
   rows: Row[];
   categories: Category[];
@@ -34,6 +37,7 @@ export function TransactionList({
   t: Dictionary["transactionList"];
   common: Dictionary["common"];
   categoryLabels: Dictionary["categories"];
+  addCategoryT: Dictionary["addCategory"];
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const categoryName = (id: string | null) => {
@@ -60,6 +64,7 @@ export function TransactionList({
                 t={t}
                 common={common}
                 categoryLabels={categoryLabels}
+                addCategoryT={addCategoryT}
                 onDone={() => setEditingId(null)}
               />
             </div>
@@ -125,6 +130,7 @@ export function TransactionList({
                 t={t}
                 common={common}
                 categoryLabels={categoryLabels}
+                addCategoryT={addCategoryT}
                 onDone={() => setEditingId(null)}
               />
                   </td>
@@ -220,7 +226,12 @@ function DeleteButton({
               <button type="button" onClick={() => setOpen(false)} className={btnGhostClass}>
                 {common.cancel}
               </button>
-              <form action={deleteTransaction}>
+              <form
+                action={async (formData) => {
+                  await deleteTransaction(formData);
+                  notify(common.deletedToast);
+                }}
+              >
                 <input type="hidden" name="id" value={id} />
                 <button type="submit" className={`${btnDestructiveClass} w-full`}>
                   {common.delete}
@@ -240,6 +251,7 @@ function EditForm({
   t,
   common,
   categoryLabels,
+  addCategoryT,
   onDone,
 }: {
   row: Row;
@@ -247,12 +259,14 @@ function EditForm({
   t: Dictionary["transactionList"];
   common: Dictionary["common"];
   categoryLabels: Dictionary["categories"];
+  addCategoryT: Dictionary["addCategory"];
   onDone: () => void;
 }) {
   return (
     <form
       action={async (formData) => {
         await updateTransaction(formData);
+        notify(common.savedToast);
         onDone();
       }}
       className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end"
@@ -277,14 +291,14 @@ function EditForm({
 
       <div className="flex flex-col gap-1">
         <label className="text-xs text-foreground/50">{t.category}</label>
-        <select name="categoryId" defaultValue={row.category_id ?? ""} className={`${fieldClass} py-1`}>
-          <option value="">{common.uncategorized}</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {categoryDisplayName(c, categoryLabels)}
-            </option>
-          ))}
-        </select>
+        <CategorySelect
+          categories={categories}
+          defaultValue={row.category_id}
+          categoryLabels={categoryLabels}
+          addCategoryT={addCategoryT}
+          common={common}
+          className={`${fieldClass} py-1`}
+        />
       </div>
 
       <div className="flex flex-col gap-1">

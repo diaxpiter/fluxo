@@ -2,11 +2,14 @@
 
 import { useState } from "react";
 import { updateTransaction, deleteTransaction } from "@/app/dashboard/actions";
+import { CategorySelect } from "@/app/dashboard/category-select";
+import { SensitiveValue } from "@/components/privacy";
 import { formatCurrency } from "@/lib/currency";
 import { format } from "@/lib/i18n/format";
 import { cardClass, fieldClass, btnPrimaryClass, btnGhostClass, btnDestructiveClass, linkClass, numericClass } from "@/lib/ui";
 import type { Dictionary } from "@/lib/i18n/dictionary";
-import { accountDisplayName, categoryDisplayName } from "@/lib/dashboard-data";
+import { accountDisplayName } from "@/lib/dashboard-data";
+import { notify } from "@/lib/toast";
 import type { Account, Category, Transaction } from "@/lib/types";
 
 export function RecentActivityList({
@@ -18,6 +21,7 @@ export function RecentActivityList({
   t,
   common,
   categoryLabels,
+  addCategoryT,
 }: {
   rows: Transaction[];
   accounts: Account[];
@@ -27,6 +31,7 @@ export function RecentActivityList({
   t: Dictionary["transactionList"];
   common: Dictionary["common"];
   categoryLabels: Dictionary["categories"];
+  addCategoryT: Dictionary["addCategory"];
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -50,6 +55,7 @@ export function RecentActivityList({
                 row={row}
                 categories={categories}
                 categoryLabels={categoryLabels}
+                addCategoryT={addCategoryT}
                 t={t}
                 common={common}
                 onDone={() => setEditingId(null)}
@@ -67,8 +73,10 @@ export function RecentActivityList({
                 <p
                   className={`shrink-0 text-sm ${numericClass} ${row.amount < 0 ? "text-red-400" : "text-emerald-500"}`}
                 >
-                  {row.amount >= 0 ? "+" : ""}
-                  {formatCurrency(row.amount, currency, locale)}
+                  <SensitiveValue>
+                    {row.amount >= 0 ? "+" : ""}
+                    {formatCurrency(row.amount, currency, locale)}
+                  </SensitiveValue>
                 </p>
               </div>
               <div className="mt-2 flex items-center gap-4">
@@ -113,6 +121,7 @@ export function RecentActivityList({
                       row={row}
                       categories={categories}
                       categoryLabels={categoryLabels}
+                      addCategoryT={addCategoryT}
                       t={t}
                       common={common}
                       onDone={() => setEditingId(null)}
@@ -132,8 +141,10 @@ export function RecentActivityList({
                       row.amount < 0 ? "text-red-400" : "text-emerald-500"
                     }`}
                   >
-                    {row.amount >= 0 ? "+" : ""}
-                    {formatCurrency(row.amount, currency, locale)}
+                    <SensitiveValue>
+                      {row.amount >= 0 ? "+" : ""}
+                      {formatCurrency(row.amount, currency, locale)}
+                    </SensitiveValue>
                   </td>
                   <td className="px-4 py-2.5 text-right">
                     <div className="flex items-center justify-end gap-3">
@@ -205,7 +216,12 @@ function DeleteButton({
               <button type="button" onClick={() => setOpen(false)} className={btnGhostClass}>
                 {common.cancel}
               </button>
-              <form action={deleteTransaction}>
+              <form
+                action={async (formData) => {
+                  await deleteTransaction(formData);
+                  notify(common.deletedToast);
+                }}
+              >
                 <input type="hidden" name="id" value={id} />
                 <button type="submit" className={`${btnDestructiveClass} w-full`}>
                   {common.delete}
@@ -223,6 +239,7 @@ function EditForm({
   row,
   categories,
   categoryLabels,
+  addCategoryT,
   t,
   common,
   onDone,
@@ -230,6 +247,7 @@ function EditForm({
   row: Transaction;
   categories: Category[];
   categoryLabels: Dictionary["categories"];
+  addCategoryT: Dictionary["addCategory"];
   t: Dictionary["transactionList"];
   common: Dictionary["common"];
   onDone: () => void;
@@ -238,6 +256,7 @@ function EditForm({
     <form
       action={async (formData) => {
         await updateTransaction(formData);
+        notify(common.savedToast);
         onDone();
       }}
       className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end"
@@ -262,14 +281,14 @@ function EditForm({
 
       <div className="flex flex-col gap-1">
         <label className="text-xs text-foreground/50">{t.category}</label>
-        <select name="categoryId" defaultValue={row.category_id ?? ""} className={`${fieldClass} py-1`}>
-          <option value="">{common.uncategorized}</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {categoryDisplayName(c, categoryLabels)}
-            </option>
-          ))}
-        </select>
+        <CategorySelect
+          categories={categories}
+          defaultValue={row.category_id}
+          categoryLabels={categoryLabels}
+          addCategoryT={addCategoryT}
+          common={common}
+          className={`${fieldClass} py-1`}
+        />
       </div>
 
       <div className="flex flex-col gap-1">

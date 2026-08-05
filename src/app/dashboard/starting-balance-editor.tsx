@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { updateStartingBalance } from "@/app/dashboard/actions";
 import { fieldClass, actionLinkClass } from "@/lib/ui";
+import { notify } from "@/lib/toast";
 import type { Dictionary } from "@/lib/i18n/dictionary";
 
 export function StartingBalanceEditor({
@@ -30,6 +31,7 @@ export function StartingBalanceEditor({
     <form
       action={async (formData) => {
         await updateStartingBalance(formData);
+        notify(common.savedToast);
         setEditing(false);
       }}
       className="flex items-center gap-2"

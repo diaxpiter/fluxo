@@ -112,6 +112,48 @@ function dueDateThisMonth(dueDayOfMonth: number, now: Date) {
   return ymd(new Date(now.getFullYear(), now.getMonth(), day));
 }
 
+function parseYmd(s: string) {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+/**
+ * Every date this bill falls due within the current month, as YMD strings. Monthly and yearly
+ * bills land at most once; weekly lands every matching weekday, bi-weekly every other one
+ * (aligned to `anchor_date`, since "every other Tuesday" needs a reference point to know which
+ * Tuesdays count).
+ */
+export function billOccurrencesInMonth(bill: RecurringBill, now = new Date()): string[] {
+  if (bill.recurrence_type === "monthly") {
+    return bill.due_day_of_month == null ? [] : [dueDateThisMonth(bill.due_day_of_month, now)];
+  }
+
+  if (bill.recurrence_type === "yearly") {
+    if (bill.due_month == null || bill.due_day_of_month == null || now.getMonth() + 1 !== bill.due_month) return [];
+    return [dueDateThisMonth(bill.due_day_of_month, now)];
+  }
+
+  if (bill.due_day_of_week == null) return [];
+  const anchor = bill.anchor_date ? parseYmd(bill.anchor_date) : null;
+  const { start: monthStart, end: monthEnd } = monthBoundsYmd(now);
+
+  const occurrences: string[] = [];
+  let d = parseYmd(monthStart);
+  const end = parseYmd(monthEnd);
+  while (d <= end) {
+    if (d.getDay() === bill.due_day_of_week) {
+      if (bill.recurrence_type === "weekly" || !anchor) {
+        occurrences.push(ymd(d));
+      } else {
+        const diffDays = Math.round((d.getTime() - anchor.getTime()) / 86_400_000);
+        if (((diffDays % 14) + 14) % 14 === 0) occurrences.push(ymd(d));
+      }
+    }
+    d = addDays(d, 1);
+  }
+  return occurrences;
+}
+
 function isWeekend(d: Date) {
   const day = d.getDay();
   return day === 0 || day === 6;
@@ -186,19 +228,27 @@ export function computeWidgetValues(
     }
   }
 
-  const paidRecurringBillIds = new Set(
-    transactions
-      .filter((t) => t.recurring_bill_id && t.date >= monthStart && t.date <= monthEnd)
-      .map((t) => t.recurring_bill_id),
-  );
+  // Paid *count* this month, not just a boolean -- a weekly/bi-weekly bill can have several
+  // occurrences due in one month, and paying one shouldn't hide the rest.
+  const paidCountsByBillId = new Map<string, number>();
+  for (const t of transactions) {
+    if (t.recurring_bill_id && t.date >= monthStart && t.date <= monthEnd) {
+      paidCountsByBillId.set(t.recurring_bill_id, (paidCountsByBillId.get(t.recurring_bill_id) ?? 0) + 1);
+    }
+  }
 
   for (const bill of recurringBills) {
-    if (!bill.is_active || paidRecurringBillIds.has(bill.id)) continue;
+    if (!bill.is_active) continue;
     const amount = bill.is_variable ? bill.estimated_amount ?? 0 : bill.amount ?? 0;
-    billsToPay += amount;
-    const dueDate = dueDateThisMonth(bill.due_day_of_month, now);
-    if (dueDate <= monthEnd) endOfMonthProjection -= amount;
-    if (dueDate >= today && dueDate <= next7End) billsNext7Days += amount;
+    const occurrences = billOccurrencesInMonth(bill, now);
+    const paidCount = paidCountsByBillId.get(bill.id) ?? 0;
+    const remaining = occurrences.slice(paidCount);
+
+    for (const dueDate of remaining) {
+      billsToPay += amount;
+      if (dueDate <= monthEnd) endOfMonthProjection -= amount;
+      if (dueDate >= today && dueDate <= next7End) billsNext7Days += amount;
+    }
   }
 
   const receivedIncomeSourceIds = new Set(
@@ -216,7 +266,7 @@ export function computeWidgetValues(
     ) {
       continue;
     }
-    const amount = source.expected_amount ?? 0;
+    const amount = source.is_variable ? source.estimated_amount ?? 0 : source.expected_amount ?? 0;
     const expectedDate = shiftedDateThisMonth(source.day_of_month, source.weekend_holiday_rule, now);
     if (expectedDate <= monthEnd) endOfMonthProjection += amount;
     if (expectedDate >= today && expectedDate <= weekEnd) {

@@ -35,6 +35,7 @@ export function ReviewStep({ answers, setAnswers, t, currency, locale }: StepPro
   const previewRules: AllocationRule[] = ordered.map((row, i) => ({
     id: String(i),
     user_id: "",
+    space_id: "",
     target_account_id: String(i),
     priority_order: i,
     method: row.method,

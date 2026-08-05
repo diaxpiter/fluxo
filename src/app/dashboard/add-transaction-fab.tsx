@@ -2,10 +2,11 @@
 
 import { useRef, useState, useTransition } from "react";
 import { addTransaction } from "@/app/dashboard/actions";
-import { AddCategoryInline } from "@/app/dashboard/add-category-inline";
+import { CategorySelect } from "@/app/dashboard/category-select";
 import { fieldClass, btnPositiveClass, btnDestructiveClass } from "@/lib/ui";
+import { notify } from "@/lib/toast";
 import type { Dictionary } from "@/lib/i18n/dictionary";
-import { accountDisplayName, categoryDisplayName } from "@/lib/dashboard-data";
+import { accountDisplayName } from "@/lib/dashboard-data";
 import type { Account, Category } from "@/lib/types";
 
 export function AddTransactionFab({
@@ -67,6 +68,7 @@ export function AddTransactionFab({
               action={(formData) => {
                 startTransition(async () => {
                   await addTransaction(formData);
+                  notify(common.savedToast);
                   formRef.current?.reset();
                   setOpen(false);
                 });
@@ -107,15 +109,12 @@ export function AddTransactionFab({
 
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-foreground/50">{t.categoryLabel}</label>
-                <select name="categoryId" defaultValue="" className={fieldClass}>
-                  <option value="">{common.uncategorized}</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {categoryDisplayName(c, categoryLabels)}
-                    </option>
-                  ))}
-                </select>
-                <AddCategoryInline t={addCategoryT} common={common} />
+                <CategorySelect
+                  categories={categories}
+                  categoryLabels={categoryLabels}
+                  addCategoryT={addCategoryT}
+                  common={common}
+                />
               </div>
 
               <div className="flex flex-col gap-1.5">

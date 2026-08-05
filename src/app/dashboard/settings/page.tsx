@@ -7,6 +7,7 @@ import { AccountManager } from "@/app/dashboard/account-manager";
 import { RecurringBillsManager } from "@/app/dashboard/recurring-bills-manager";
 import { IncomeSourcesManager } from "@/app/dashboard/income-sources-manager";
 import { AllocationRulesManager } from "@/app/dashboard/allocation-rules-manager";
+import { SpaceSwitcher } from "@/app/dashboard/space-switcher";
 import {
   computeAccountBalances,
   getDashboardContext,
@@ -14,6 +15,7 @@ import {
   getReceivedIncomeSourceIds,
   getTransactionsForAccounts,
 } from "@/lib/dashboard-data";
+import { getCurrentSpace } from "@/lib/spaces";
 import { getDictionary, getLocale } from "@/lib/i18n/dictionary";
 import { cardClass, btnGhostClass } from "@/lib/ui";
 
@@ -28,8 +30,10 @@ export default async function SettingsPage() {
   const locale = await getLocale();
   const t = getDictionary(locale);
 
+  const { spaces, currentSpace } = await getCurrentSpace(supabase, user.id);
+
   const { accounts, categories, currency, widgetPrefs, recurringBills, incomeSources, allocationRules } =
-    await getDashboardContext(supabase, user.id, getProfile(user.id));
+    await getDashboardContext(supabase, user.id, getProfile(user.id), currentSpace);
   const [transactions, paidBillIds, receivedSourceIds] = await Promise.all([
     getTransactionsForAccounts(supabase, accounts.map((a) => a.id)),
     getPaidRecurringBillIds(supabase),
@@ -40,7 +44,10 @@ export default async function SettingsPage() {
   return (
     <main className="flex flex-1 flex-col px-4 pb-24 pt-[calc(env(safe-area-inset-top)+2rem)] sm:pt-12 sm:pb-24">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-        <h1 className="text-xl font-semibold tracking-tight">{t.settings.title}</h1>
+        <div className="flex items-center gap-3">
+          <SpaceSwitcher spaces={spaces} currentSpace={currentSpace} t={t.spaces} common={t.common} />
+          <h1 className="text-xl font-semibold tracking-tight">{t.settings.title}</h1>
+        </div>
 
         <div className="flex flex-col gap-3">
           <h2 className="text-sm font-medium text-foreground/50">{t.settings.widgetsHeading}</h2>

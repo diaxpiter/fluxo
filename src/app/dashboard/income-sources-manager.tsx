@@ -7,6 +7,7 @@ import {
   deleteIncomeSource,
   receiveIncomeSource,
 } from "@/app/dashboard/actions";
+import { CategorySelect } from "@/app/dashboard/category-select";
 import { formatCurrency } from "@/lib/currency";
 import { format } from "@/lib/i18n/format";
 import {
@@ -20,6 +21,7 @@ import {
   actionLinkClass,
   numericClass,
 } from "@/lib/ui";
+import { notify } from "@/lib/toast";
 import type { Dictionary } from "@/lib/i18n/dictionary";
 import { accountDisplayName, categoryDisplayName } from "@/lib/dashboard-data";
 import { computeAllocation } from "@/lib/allocation";
@@ -129,6 +131,7 @@ function SourceRow({
       : t.incomeSources.irregularBadge;
   const account = accounts.find((a) => a.id === source.account_id);
   const accountName = account ? accountDisplayName(account, t.common.mainAccount) : "";
+  const amount = source.is_variable ? source.estimated_amount : source.expected_amount;
 
   return (
     <div className="border-b border-foreground/5 p-4 last:border-0">
@@ -139,19 +142,29 @@ function SourceRow({
             {scheduleBadge} · {categoryName} · {accountName}
           </p>
         </div>
-        {source.expected_amount != null && (
-          <p className={`shrink-0 text-sm ${numericClass}`}>{formatCurrency(source.expected_amount, currency, locale)}</p>
+        {amount != null && (
+          <p className={`shrink-0 text-sm ${numericClass}`}>
+            {source.is_variable ? "~" : ""}
+            {formatCurrency(amount, currency, locale)}
+          </p>
         )}
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
-        <form action={updateIncomeSource} onChange={(e) => e.currentTarget.requestSubmit()}>
+        <form
+          action={async (formData) => {
+            await updateIncomeSource(formData);
+            notify(t.common.savedToast);
+          }}
+          onChange={(e) => e.currentTarget.requestSubmit()}
+        >
           <input type="hidden" name="id" value={source.id} />
           <input type="hidden" name="name" value={source.name} />
           <input type="hidden" name="scheduleType" value={source.schedule_type} />
           <input type="hidden" name="dayOfMonth" value={source.day_of_month ?? 1} />
           <input type="hidden" name="weekendShift" value={source.weekend_holiday_rule} />
-          <input type="hidden" name="expectedAmount" value={source.expected_amount ?? ""} />
+          <input type="hidden" name="isVariable" value={source.is_variable ? "on" : ""} />
+          <input type="hidden" name="expectedAmount" value={amount ?? ""} />
           <input type="hidden" name="accountId" value={source.account_id} />
           <input type="hidden" name="categoryId" value={source.category_id ?? ""} />
           <label className="flex items-center gap-1.5 text-foreground/50">
@@ -204,7 +217,8 @@ function ReceiveButton({
   const [open, setOpen] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const [isPending, startTransition] = useTransition();
-  const [amount, setAmount] = useState(String(source.expected_amount ?? ""));
+  const defaultAmount = source.is_variable ? source.estimated_amount : source.expected_amount;
+  const [amount, setAmount] = useState(String(defaultAmount ?? ""));
   const today = new Date().toISOString().slice(0, 10);
 
   const numericAmount = Number(amount) || 0;
@@ -249,6 +263,7 @@ function ReceiveButton({
               action={(formData) => {
                 startTransition(async () => {
                   await receiveIncomeSource(formData);
+                  notify(t.common.savedToast);
                   setOpen(false);
                 });
               }}
@@ -342,7 +357,12 @@ function DeleteSourceButton({ source, t }: { source: IncomeSource; t: Dictionary
               <button type="button" onClick={() => setOpen(false)} className={btnGhostClass}>
                 {t.common.cancel}
               </button>
-              <form action={deleteIncomeSource}>
+              <form
+                action={async (formData) => {
+                  await deleteIncomeSource(formData);
+                  notify(t.common.deletedToast);
+                }}
+              >
                 <input type="hidden" name="id" value={source.id} />
                 <button type="submit" className={`${btnDestructiveClass} w-full`}>
                   {t.common.delete}
@@ -370,12 +390,14 @@ function SourceForm({
   onDone: () => void;
 }) {
   const [scheduleType, setScheduleType] = useState<IncomeScheduleType>(source?.schedule_type ?? "fixed_monthly_date");
+  const [isVariable, setIsVariable] = useState(source?.is_variable ?? false);
   const action = source ? updateIncomeSource : addIncomeSource;
 
   return (
     <form
       action={async (formData) => {
         await action(formData);
+        notify(t.common.savedToast);
         onDone();
       }}
       className={`${cardClass} flex flex-col gap-3 p-4`}
@@ -430,16 +452,29 @@ function SourceForm({
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs text-foreground/50">{t.incomeSources.expectedAmountLabel}</label>
+          <label className="text-xs text-foreground/50">
+            {isVariable ? t.incomeSources.estimatedAmountLabel : t.incomeSources.expectedAmountLabel}
+          </label>
           <input
             type="number"
             name="expectedAmount"
             step="0.01"
             min="0"
-            defaultValue={source?.expected_amount ?? undefined}
+            defaultValue={source ? (source.is_variable ? source.estimated_amount ?? undefined : source.expected_amount ?? undefined) : undefined}
             className={`${fieldClass} w-28`}
           />
         </div>
+
+        <label className="flex items-center gap-1.5 pb-2 text-xs text-foreground/50">
+          <input
+            type="checkbox"
+            name="isVariable"
+            checked={isVariable}
+            onChange={(e) => setIsVariable(e.target.checked)}
+            className="h-3.5 w-3.5 cursor-pointer rounded border-foreground/30 accent-emerald-500"
+          />
+          {t.incomeSources.variableAmountLabel}
+        </label>
 
         <div className="flex flex-col gap-1.5">
           <label className="text-xs text-foreground/50">{t.common.account}</label>
@@ -454,14 +489,13 @@ function SourceForm({
 
         <div className="flex flex-col gap-1.5">
           <label className="text-xs text-foreground/50">{t.addTransaction.categoryLabel}</label>
-          <select name="categoryId" defaultValue={source?.category_id ?? ""} className={fieldClass}>
-            <option value="">{t.common.uncategorized}</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {categoryDisplayName(c, t.categories)}
-              </option>
-            ))}
-          </select>
+          <CategorySelect
+            categories={categories}
+            defaultValue={source?.category_id}
+            categoryLabels={t.categories}
+            addCategoryT={t.addCategory}
+            common={t.common}
+          />
         </div>
 
         <label className="flex items-center gap-1.5 pb-2 text-xs text-foreground/50">

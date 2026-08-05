@@ -10,7 +10,8 @@ import { format } from "@/lib/i18n/format";
 import { LOCALE_COOKIE, isLocale } from "@/lib/i18n/locales";
 import { accountDisplayName } from "@/lib/dashboard-data";
 import { computeAllocation } from "@/lib/allocation";
-import type { Account, AllocationRule } from "@/lib/types";
+import { SPACE_COOKIE, getCurrentSpace } from "@/lib/spaces";
+import type { Account, AllocationRule, BillRecurrenceType, Category, Space } from "@/lib/types";
 
 function signedAmount(formData: FormData) {
   const magnitude = Math.abs(Number(formData.get("amount")));
@@ -146,7 +147,8 @@ export async function updateWidgetPrefs(formData: FormData) {
     wide: formData.get(`wide_${key}`) === "on",
   }));
 
-  await supabase.from("profiles").update({ widgets }).eq("id", user.id);
+  const { currentSpace } = await getCurrentSpace(supabase, user.id);
+  await supabase.from("spaces").update({ widgets }).eq("id", currentSpace.id).eq("user_id", user.id);
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
@@ -215,13 +217,20 @@ function recurringBillFields(formData: FormData) {
   const isVariable = formData.get("isVariable") === "on";
   const amountValue = Math.abs(Number(formData.get("amount")));
   const categoryId = formData.get("categoryId");
+  const recurrenceType = (formData.get("recurrenceType") as BillRecurrenceType) || "monthly";
 
   return {
     name: (formData.get("name") as string)?.trim(),
     is_variable: isVariable,
     amount: isVariable ? null : amountValue,
     estimated_amount: isVariable ? amountValue : null,
-    due_day_of_month: Number(formData.get("dueDayOfMonth")),
+    recurrence_type: recurrenceType,
+    due_day_of_month:
+      recurrenceType === "monthly" || recurrenceType === "yearly" ? Number(formData.get("dueDayOfMonth")) : null,
+    due_day_of_week:
+      recurrenceType === "weekly" || recurrenceType === "biweekly" ? Number(formData.get("dueDayOfWeek")) : null,
+    due_month: recurrenceType === "yearly" ? Number(formData.get("dueMonth")) : null,
+    anchor_date: recurrenceType === "biweekly" ? (formData.get("anchorDate") as string) : null,
     account_id: formData.get("accountId"),
     category_id: categoryId ? categoryId : null,
     is_active: formData.get("isActive") === "on",
@@ -235,8 +244,11 @@ export async function addRecurringBill(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) return;
 
+  const { currentSpace } = await getCurrentSpace(supabase, user.id);
+
   await supabase.from("recurring_bills").insert({
     user_id: user.id,
+    space_id: currentSpace.id,
     ...recurringBillFields(formData),
   });
 
@@ -301,7 +313,9 @@ export async function payRecurringBill(formData: FormData) {
 
 function incomeSourceFields(formData: FormData) {
   const scheduleType = formData.get("scheduleType") === "irregular" ? "irregular" : "fixed_monthly_date";
-  const expectedAmountRaw = formData.get("expectedAmount") as string | null;
+  const isVariable = formData.get("isVariable") === "on";
+  const amountRaw = formData.get("expectedAmount") as string | null;
+  const amountValue = amountRaw ? Math.abs(Number(amountRaw)) : null;
   const categoryId = formData.get("categoryId");
 
   return {
@@ -309,7 +323,9 @@ function incomeSourceFields(formData: FormData) {
     schedule_type: scheduleType,
     day_of_month: scheduleType === "fixed_monthly_date" ? Number(formData.get("dayOfMonth")) : null,
     weekend_holiday_rule: (formData.get("weekendShift") as string) || "none",
-    expected_amount: expectedAmountRaw ? Math.abs(Number(expectedAmountRaw)) : null,
+    is_variable: isVariable,
+    expected_amount: isVariable ? null : amountValue,
+    estimated_amount: isVariable ? amountValue : null,
     account_id: formData.get("accountId"),
     category_id: categoryId ? categoryId : null,
     is_active: formData.get("isActive") === "on",
@@ -323,8 +339,11 @@ export async function addIncomeSource(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) return;
 
+  const { currentSpace } = await getCurrentSpace(supabase, user.id);
+
   await supabase.from("income_sources").insert({
     user_id: user.id,
+    space_id: currentSpace.id,
     ...incomeSourceFields(formData),
   });
 
@@ -451,8 +470,11 @@ export async function addAccount(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) return;
 
+  const { currentSpace } = await getCurrentSpace(supabase, user.id);
+
   await supabase.from("accounts").insert({
     user_id: user.id,
+    space_id: currentSpace.id,
     starting_balance: Number(formData.get("startingBalance")) || 0,
     ...accountFields(formData),
   });
@@ -576,13 +598,17 @@ export async function addAllocationRule(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) return;
 
+  const { currentSpace } = await getCurrentSpace(supabase, user.id);
+
   const { count } = await supabase
     .from("allocation_rules")
     .select("id", { count: "exact", head: true })
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .eq("space_id", currentSpace.id);
 
   await supabase.from("allocation_rules").insert({
     user_id: user.id,
+    space_id: currentSpace.id,
     priority_order: count ?? 0,
     ...allocationRuleFields(formData),
   });
@@ -639,7 +665,110 @@ export async function updateAllocationRuleOrder(formData: FormData) {
   revalidatePath("/dashboard/settings");
 }
 
-export async function addCategory(formData: FormData) {
+export async function addCategory(formData: FormData): Promise<Category | null> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const name = (formData.get("name") as string)?.trim();
+  if (!name) return null;
+
+  const { currentSpace } = await getCurrentSpace(supabase, user.id);
+
+  const { data, error } = await supabase
+    .from("categories")
+    .insert({
+      user_id: user.id,
+      space_id: currentSpace.id,
+      name,
+      kind: "other",
+    })
+    .select()
+    .single();
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/history");
+  revalidatePath("/dashboard/settings");
+
+  if (error) return null;
+  return data as Category;
+}
+
+/** The literal English seed names the signup trigger inserts for a brand-new space (see 0002_ledger.sql / 0013_spaces.sql). */
+const STARTER_CATEGORIES = [
+  { name: "Income", kind: "income" },
+  { name: "Housing", kind: "fixed_bill" },
+  { name: "Utilities", kind: "fixed_bill" },
+  { name: "Subscriptions", kind: "fixed_bill" },
+  { name: "Savings", kind: "savings" },
+  { name: "Discretionary", kind: "discretionary" },
+  { name: "Other", kind: "other" },
+];
+
+export async function switchSpace(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const spaceId = formData.get("spaceId") as string;
+  const { data: space } = await supabase.from("spaces").select("id").eq("id", spaceId).eq("user_id", user.id).single();
+  if (!space) return;
+
+  const cookieStore = await cookies();
+  cookieStore.set(SPACE_COOKIE, space.id, { path: "/", maxAge: 60 * 60 * 24 * 365 });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/history");
+  revalidatePath("/dashboard/settings");
+}
+
+export type AddSpaceResult = { ok: true; space: Space } | { ok: false; error: string };
+
+export async function addSpace(formData: FormData): Promise<AddSpaceResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  const name = (formData.get("name") as string)?.trim();
+  if (!name) return { ok: false, error: "Name is required." };
+  const color = (formData.get("color") as string) || "#10b981";
+
+  const { data: space, error } = await supabase
+    .from("spaces")
+    .insert({ user_id: user.id, name, color })
+    .select()
+    .single();
+  if (error || !space) return { ok: false, error: error?.message ?? "Something went wrong." };
+
+  // Every space starts with its own Main Account + starter categories, same as a new signup.
+  await supabase.from("accounts").insert({
+    user_id: user.id,
+    space_id: space.id,
+    name: "Main Account",
+    type: "checking",
+  });
+
+  await supabase
+    .from("categories")
+    .insert(STARTER_CATEGORIES.map((c) => ({ user_id: user.id, space_id: space.id, name: c.name, kind: c.kind })));
+
+  const cookieStore = await cookies();
+  cookieStore.set(SPACE_COOKIE, space.id, { path: "/", maxAge: 60 * 60 * 24 * 365 });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/history");
+  revalidatePath("/dashboard/settings");
+
+  return { ok: true, space: space as Space };
+}
+
+export async function updateSpace(formData: FormData) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -648,13 +777,59 @@ export async function addCategory(formData: FormData) {
 
   const name = (formData.get("name") as string)?.trim();
   if (!name) return;
+  const color = (formData.get("color") as string) || "#10b981";
 
-  await supabase.from("categories").insert({
-    user_id: user.id,
-    name,
-    kind: "other",
-  });
+  await supabase
+    .from("spaces")
+    .update({ name, color })
+    .eq("id", formData.get("id"))
+    .eq("user_id", user.id);
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/history");
+  revalidatePath("/dashboard/settings");
+}
+
+export type DeleteSpaceResult = { ok: true } | { ok: false; error: string };
+
+export async function deleteSpace(formData: FormData): Promise<DeleteSpaceResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  const t = getDictionary(await getLocale());
+  const spaceId = formData.get("id") as string;
+
+  const { count } = await supabase
+    .from("spaces")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id);
+
+  if ((count ?? 0) <= 1) {
+    return { ok: false, error: t.spaces.lastSpaceError };
+  }
+
+  const { error } = await supabase.from("spaces").delete().eq("id", spaceId).eq("user_id", user.id);
+  if (error) return { ok: false, error: error.message };
+
+  // If the deleted space was the current one, fall back to whichever one is left.
+  const cookieStore = await cookies();
+  if (cookieStore.get(SPACE_COOKIE)?.value === spaceId) {
+    const { data: remaining } = await supabase
+      .from("spaces")
+      .select("id")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .single();
+    if (remaining) cookieStore.set(SPACE_COOKIE, remaining.id, { path: "/", maxAge: 60 * 60 * 24 * 365 });
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/history");
+  revalidatePath("/dashboard/settings");
+
+  return { ok: true };
 }
