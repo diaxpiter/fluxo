@@ -53,7 +53,9 @@ export type Dictionary = {
     title: string;
     widgetsHeading: string;
     categoriesHeading: string;
+    sharingHeading: string;
     languageHeading: string;
+    securityHeading: string;
     sessionHeading: string;
     logOut: string;
   };
@@ -253,6 +255,27 @@ export type Dictionary = {
     /** Placeholder: {name} */
     deleteBody: string;
     lastSpaceError: string;
+    membersHeading: string;
+    inviteEmailLabel: string;
+    inviteEmailPlaceholder: string;
+    inviteButton: string;
+    inviteSelfError: string;
+    inviteNotOwnerError: string;
+    inviteDuplicateError: string;
+    pendingBadge: string;
+    ownerLabel: string;
+    removeButton: string;
+    leaveButton: string;
+    leaveConfirmTitle: string;
+    /** Placeholder: {name} */
+    leaveConfirmBody: string;
+    pendingInvitesHeading: string;
+    /** Placeholders: {inviter}, {space} */
+    pendingInviteBody: string;
+    /** Placeholder: {space} */
+    pendingInviteBodyUnknownInviter: string;
+    acceptButton: string;
+    declineButton: string;
   };
   importTransactions: {
     linkText: string;
@@ -345,6 +368,7 @@ export type Dictionary = {
       emailLabel: string;
       passwordLabel: string;
       submit: string;
+      forgotPasswordLink: string;
       noAccount: string;
       signupLink: string;
     };
@@ -359,6 +383,45 @@ export type Dictionary = {
       haveAccount: string;
       loginLink: string;
     };
+    forgotPassword: {
+      heading: string;
+      emailLabel: string;
+      submit: string;
+      backToLogin: string;
+      checkEmailTitle: string;
+      checkEmailBody: string;
+    };
+    resetPassword: {
+      heading: string;
+      passwordLabel: string;
+      confirmPasswordLabel: string;
+      submit: string;
+      mismatchError: string;
+      expiredError: string;
+      success: string;
+    };
+    mfaChallenge: {
+      heading: string;
+      helpText: string;
+      codeLabel: string;
+      submit: string;
+      invalidCode: string;
+    };
+  };
+  mfaSettings: {
+    description: string;
+    enabledLabel: string;
+    disabledLabel: string;
+    enrollButton: string;
+    cancelButton: string;
+    scanHelpText: string;
+    codeLabel: string;
+    verifyButton: string;
+    disableButton: string;
+    disableConfirmTitle: string;
+    disableConfirmBody: string;
+    invalidCode: string;
+    errorGeneric: string;
   };
 };
 

@@ -11,25 +11,27 @@ import { format } from "@/lib/i18n/format";
 import { LOCALE_COOKIE, isLocale } from "@/lib/i18n/locales";
 import { accountDisplayName } from "@/lib/dashboard-data";
 import { computeAllocation } from "@/lib/allocation";
-import { SPACE_COOKIE, getCurrentSpace } from "@/lib/spaces";
+import { SPACE_COOKIE, getCurrentSpace, getSpaces } from "@/lib/spaces";
 import type { Account, AllocationRule, BillRecurrenceType, Category, Space } from "@/lib/types";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
 /**
- * Resolves a client-submitted id to itself only if it actually belongs to this user.
- * category_id/recurring_bill_id/income_source_id are plain FKs with no RLS check of their
- * own (unlike account_id/target_account_id) -- without this, a tampered request could attach
- * a transaction to another user's category/bill/income source.
+ * Resolves a client-submitted id to itself only if it actually belongs to the current space.
+ * category_id/recurring_bill_id/income_source_id are plain FKs -- without this, a tampered (or
+ * stale, e.g. left over from a different space) request could attach a transaction to a
+ * category/bill/income source outside the space it's being added to. RLS enforces the same
+ * space-membership boundary at the database level (0016_space_sharing.sql); this narrows it
+ * further to *this* space and fails soft (drops the id) instead of erroring the whole request.
  */
 async function ownedId(
   supabase: SupabaseClient,
   table: "categories" | "recurring_bills" | "income_sources",
   id: FormDataEntryValue | null,
-  userId: string,
+  spaceId: string,
 ): Promise<string | null> {
   if (!id) return null;
-  const { data } = await supabase.from(table).select("id").eq("id", id).eq("user_id", userId).single();
+  const { data } = await supabase.from(table).select("id").eq("id", id).eq("space_id", spaceId).single();
   return data?.id ?? null;
 }
 
@@ -47,7 +49,8 @@ export async function addTransaction(formData: FormData): Promise<ActionResult> 
   const t = getDictionary(await getLocale()).common;
   if (!user) return { ok: false, error: t.errorToast };
 
-  const categoryId = await ownedId(supabase, "categories", formData.get("categoryId"), user.id);
+  const { currentSpace } = await getCurrentSpace(supabase, user.id);
+  const categoryId = await ownedId(supabase, "categories", formData.get("categoryId"), currentSpace.id);
 
   const { error } = await supabase.from("transactions").insert({
     user_id: user.id,
@@ -72,12 +75,13 @@ export async function updateTransaction(formData: FormData): Promise<ActionResul
   const dict = getDictionary(await getLocale());
   if (!user) return { ok: false, error: dict.common.errorToast };
 
+  const { currentSpace } = await getCurrentSpace(supabase, user.id);
+
   const id = formData.get("id");
   const { data: existing } = await supabase
     .from("transactions")
     .select("transfer_group_id, recurring_bill_id, income_source_id")
     .eq("id", id)
-    .eq("user_id", user.id)
     .single();
 
   // Editing one leg of a transfer (or a bill/income-linked row) in place would desync it from
@@ -86,7 +90,7 @@ export async function updateTransaction(formData: FormData): Promise<ActionResul
     return { ok: false, error: dict.transactionList.linkedEditError };
   }
 
-  const categoryId = await ownedId(supabase, "categories", formData.get("categoryId"), user.id);
+  const categoryId = await ownedId(supabase, "categories", formData.get("categoryId"), currentSpace.id);
 
   const { error } = await supabase
     .from("transactions")
@@ -96,8 +100,7 @@ export async function updateTransaction(formData: FormData): Promise<ActionResul
       description: formData.get("description"),
       amount: signedAmount(formData),
     })
-    .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("id", id);
   if (error) return { ok: false, error: dict.common.errorToast };
 
   revalidatePath("/dashboard");
@@ -114,17 +117,12 @@ export async function deleteTransaction(formData: FormData): Promise<ActionResul
   if (!user) return { ok: false, error: t.errorToast };
 
   const id = formData.get("id");
-  const { data: transaction } = await supabase
-    .from("transactions")
-    .select("transfer_group_id")
-    .eq("id", id)
-    .eq("user_id", user.id)
-    .single();
+  const { data: transaction } = await supabase.from("transactions").select("transfer_group_id").eq("id", id).single();
 
   const { error } = transaction?.transfer_group_id
     // Delete both legs of the transfer together so the ledgers never go out of sync.
-    ? await supabase.from("transactions").delete().eq("transfer_group_id", transaction.transfer_group_id).eq("user_id", user.id)
-    : await supabase.from("transactions").delete().eq("id", id).eq("user_id", user.id);
+    ? await supabase.from("transactions").delete().eq("transfer_group_id", transaction.transfer_group_id)
+    : await supabase.from("transactions").delete().eq("id", id);
   if (error) return { ok: false, error: t.errorToast };
 
   revalidatePath("/dashboard");
@@ -143,8 +141,7 @@ export async function updateStartingBalance(formData: FormData): Promise<ActionR
   const { error } = await supabase
     .from("accounts")
     .update({ starting_balance: Number(formData.get("startingBalance")) })
-    .eq("id", formData.get("accountId"))
-    .eq("user_id", user.id);
+    .eq("id", formData.get("accountId"));
   if (error) return { ok: false, error: t.errorToast };
 
   revalidatePath("/dashboard");
@@ -166,6 +163,11 @@ export async function updateLanguage(formData: FormData): Promise<ActionResult> 
 
   const { error } = await supabase.from("profiles").update({ language }).eq("id", user.id);
   if (error) return { ok: false, error: t.errorToast };
+
+  // Keeps auth user_metadata.language in step with profiles.language -- Supabase's own
+  // confirmation/recovery email templates key off .Data.language, which only sees
+  // user_metadata, not the profiles table.
+  await supabase.auth.updateUser({ data: { language } });
 
   const cookieStore = await cookies();
   cookieStore.set(LOCALE_COOKIE, language, { path: "/", maxAge: 60 * 60 * 24 * 365 });
@@ -192,7 +194,7 @@ export async function updateWidgetPrefs(formData: FormData): Promise<ActionResul
   }));
 
   const { currentSpace } = await getCurrentSpace(supabase, user.id);
-  const { error } = await supabase.from("spaces").update({ widgets }).eq("id", currentSpace.id).eq("user_id", user.id);
+  const { error } = await supabase.from("spaces").update({ widgets }).eq("id", currentSpace.id);
   if (error) return { ok: false, error: t.errorToast };
 
   revalidatePath("/dashboard");
@@ -245,8 +247,7 @@ export async function importTransactions(formData: FormData): Promise<ImportResu
   const { count: existingCount } = await supabase
     .from("transactions")
     .select("id", { count: "exact", head: true })
-    .eq("account_id", accountId)
-    .eq("user_id", user.id);
+    .eq("account_id", accountId);
   const isFirstImportForAccount = (existingCount ?? 0) === 0;
 
   const { error: insertError } = await supabase.from("transactions").insert(
@@ -268,8 +269,7 @@ export async function importTransactions(formData: FormData): Promise<ImportResu
     const { error: balanceError } = await supabase
       .from("accounts")
       .update({ starting_balance: parsed.startingBalance })
-      .eq("id", accountId)
-      .eq("user_id", user.id);
+      .eq("id", accountId);
     startingBalanceApplied = !balanceError;
   }
 
@@ -344,8 +344,7 @@ export async function updateRecurringBill(formData: FormData): Promise<ActionRes
   const { error } = await supabase
     .from("recurring_bills")
     .update(recurringBillFields(formData))
-    .eq("id", formData.get("id"))
-    .eq("user_id", user.id);
+    .eq("id", formData.get("id"));
   if (error) return { ok: false, error: t.errorToast };
 
   revalidatePath("/dashboard");
@@ -361,7 +360,7 @@ export async function deleteRecurringBill(formData: FormData): Promise<ActionRes
   const t = getDictionary(await getLocale()).common;
   if (!user) return { ok: false, error: t.errorToast };
 
-  const { error } = await supabase.from("recurring_bills").delete().eq("id", formData.get("id")).eq("user_id", user.id);
+  const { error } = await supabase.from("recurring_bills").delete().eq("id", formData.get("id"));
   if (error) return { ok: false, error: t.errorToast };
 
   revalidatePath("/dashboard");
@@ -377,8 +376,9 @@ export async function payRecurringBill(formData: FormData): Promise<ActionResult
   const t = getDictionary(await getLocale()).common;
   if (!user) return { ok: false, error: t.errorToast };
 
-  const categoryId = await ownedId(supabase, "categories", formData.get("categoryId"), user.id);
-  const billId = await ownedId(supabase, "recurring_bills", formData.get("billId"), user.id);
+  const { currentSpace } = await getCurrentSpace(supabase, user.id);
+  const categoryId = await ownedId(supabase, "categories", formData.get("categoryId"), currentSpace.id);
+  const billId = await ownedId(supabase, "recurring_bills", formData.get("billId"), currentSpace.id);
   if (!billId) return { ok: false, error: t.errorToast };
   const magnitude = Math.abs(Number(formData.get("amount")));
   if (!magnitude) return { ok: false, error: t.errorToast };
@@ -454,8 +454,7 @@ export async function updateIncomeSource(formData: FormData): Promise<ActionResu
   const { error } = await supabase
     .from("income_sources")
     .update(incomeSourceFields(formData))
-    .eq("id", formData.get("id"))
-    .eq("user_id", user.id);
+    .eq("id", formData.get("id"));
   if (error) return { ok: false, error: t.errorToast };
 
   revalidatePath("/dashboard");
@@ -471,7 +470,7 @@ export async function deleteIncomeSource(formData: FormData): Promise<ActionResu
   const t = getDictionary(await getLocale()).common;
   if (!user) return { ok: false, error: t.errorToast };
 
-  const { error } = await supabase.from("income_sources").delete().eq("id", formData.get("id")).eq("user_id", user.id);
+  const { error } = await supabase.from("income_sources").delete().eq("id", formData.get("id"));
   if (error) return { ok: false, error: t.errorToast };
 
   revalidatePath("/dashboard");
@@ -487,8 +486,9 @@ export async function receiveIncomeSource(formData: FormData): Promise<ActionRes
   const t = getDictionary(await getLocale());
   if (!user) return { ok: false, error: t.common.errorToast };
 
-  const categoryId = await ownedId(supabase, "categories", formData.get("categoryId"), user.id);
-  const sourceId = await ownedId(supabase, "income_sources", formData.get("sourceId"), user.id);
+  const { currentSpace } = await getCurrentSpace(supabase, user.id);
+  const categoryId = await ownedId(supabase, "categories", formData.get("categoryId"), currentSpace.id);
+  const sourceId = await ownedId(supabase, "income_sources", formData.get("sourceId"), currentSpace.id);
   if (!sourceId) return { ok: false, error: t.common.errorToast };
   const accountId = formData.get("accountId") as string;
   const magnitude = Math.abs(Number(formData.get("amount")));
@@ -507,11 +507,14 @@ export async function receiveIncomeSource(formData: FormData): Promise<ActionRes
     },
   ];
 
-  // Recompute the allocation server-side from the current rules -- never trust
-  // a client-submitted breakdown, the client preview is display-only.
+  // Recompute the allocation server-side from the current rules -- never trust a
+  // client-submitted breakdown, the client preview is display-only. Scoped to the current
+  // space, not just this user: a user with more than one space (e.g. "Personal" and a shared
+  // "Ring & Co") must never have one space's allocation rules or accounts applied to income
+  // received in the other.
   const [{ data: rules }, { data: accounts }] = await Promise.all([
-    supabase.from("allocation_rules").select("*").eq("user_id", user.id).eq("is_active", true),
-    supabase.from("accounts").select("*").eq("user_id", user.id),
+    supabase.from("allocation_rules").select("*").eq("space_id", currentSpace.id).eq("is_active", true),
+    supabase.from("accounts").select("*").eq("space_id", currentSpace.id),
   ]);
 
   const accountList = (accounts as Account[] | null) ?? [];
@@ -601,8 +604,7 @@ export async function updateAccount(formData: FormData): Promise<ActionResult> {
   const { error } = await supabase
     .from("accounts")
     .update(accountFields(formData))
-    .eq("id", formData.get("id"))
-    .eq("user_id", user.id);
+    .eq("id", formData.get("id"));
   if (error) return { ok: false, error: t.errorToast };
 
   revalidatePath("/dashboard");
@@ -620,16 +622,16 @@ export async function archiveAccount(formData: FormData): Promise<ActionResult> 
   if (!user) return { ok: false, error: t.errorToast };
 
   const id = formData.get("id");
-  const { error } = await supabase.from("accounts").update({ is_archived: true }).eq("id", id).eq("user_id", user.id);
+  const { error } = await supabase.from("accounts").update({ is_archived: true }).eq("id", id);
   if (error) return { ok: false, error: t.errorToast };
 
   // An archived account should stop generating new obligations -- otherwise its bills/income
   // keep contributing to widgets and "mark as paid"/"receive" can still deposit into an
   // account the user thought was retired.
   await Promise.all([
-    supabase.from("recurring_bills").update({ is_active: false }).eq("account_id", id).eq("user_id", user.id),
-    supabase.from("income_sources").update({ is_active: false }).eq("account_id", id).eq("user_id", user.id),
-    supabase.from("allocation_rules").update({ is_active: false }).eq("target_account_id", id).eq("user_id", user.id),
+    supabase.from("recurring_bills").update({ is_active: false }).eq("account_id", id),
+    supabase.from("income_sources").update({ is_active: false }).eq("account_id", id),
+    supabase.from("allocation_rules").update({ is_active: false }).eq("target_account_id", id),
   ]);
 
   revalidatePath("/dashboard");
@@ -654,15 +656,16 @@ export async function transferBetweenAccounts(formData: FormData): Promise<Trans
     return { ok: false, error: t.transfer.sameAccountError };
   }
 
-  const { data: accounts } = await supabase
-    .from("accounts")
-    .select("*")
-    .in("id", [fromAccountId, toAccountId])
-    .eq("user_id", user.id);
+  const { data: accounts } = await supabase.from("accounts").select("*").in("id", [fromAccountId, toAccountId]);
 
   const fromAccount = (accounts as Account[] | null)?.find((a) => a.id === fromAccountId);
   const toAccount = (accounts as Account[] | null)?.find((a) => a.id === toAccountId);
-  if (!fromAccount || !toAccount) return { ok: false, error: t.transfer.sameAccountError };
+  // Also guards against transferring between two different spaces' accounts -- each space is
+  // meant to be a fully separate ledger, so this shouldn't be reachable via the UI, but nothing
+  // previously stopped a tampered request from mixing them.
+  if (!fromAccount || !toAccount || fromAccount.space_id !== toAccount.space_id) {
+    return { ok: false, error: t.transfer.sameAccountError };
+  }
 
   const magnitude = Math.abs(Number(formData.get("amount")));
   if (!magnitude) return { ok: false, error: t.common.errorToast };
@@ -730,7 +733,6 @@ export async function addAllocationRule(formData: FormData): Promise<ActionResul
   const { count } = await supabase
     .from("allocation_rules")
     .select("id", { count: "exact", head: true })
-    .eq("user_id", user.id)
     .eq("space_id", currentSpace.id);
 
   const { error } = await supabase.from("allocation_rules").insert({
@@ -757,8 +759,7 @@ export async function updateAllocationRule(formData: FormData): Promise<ActionRe
   const { error } = await supabase
     .from("allocation_rules")
     .update(allocationRuleFields(formData))
-    .eq("id", formData.get("id"))
-    .eq("user_id", user.id);
+    .eq("id", formData.get("id"));
   if (error) return { ok: false, error: t.errorToast };
 
   revalidatePath("/dashboard");
@@ -774,7 +775,7 @@ export async function deleteAllocationRule(formData: FormData): Promise<ActionRe
   const t = getDictionary(await getLocale()).common;
   if (!user) return { ok: false, error: t.errorToast };
 
-  const { error } = await supabase.from("allocation_rules").delete().eq("id", formData.get("id")).eq("user_id", user.id);
+  const { error } = await supabase.from("allocation_rules").delete().eq("id", formData.get("id"));
   if (error) return { ok: false, error: t.errorToast };
 
   revalidatePath("/dashboard");
@@ -792,9 +793,7 @@ export async function updateAllocationRuleOrder(formData: FormData): Promise<Act
 
   const orderedIds = formData.getAll("order") as string[];
   const results = await Promise.all(
-    orderedIds.map((id, index) =>
-      supabase.from("allocation_rules").update({ priority_order: index }).eq("id", id).eq("user_id", user.id),
-    ),
+    orderedIds.map((id, index) => supabase.from("allocation_rules").update({ priority_order: index }).eq("id", id)),
   );
   if (results.some((r) => r.error)) return { ok: false, error: t.errorToast };
 
@@ -865,11 +864,14 @@ export async function switchSpace(formData: FormData): Promise<ActionResult> {
   if (!user) return { ok: false, error: t.errorToast };
 
   const spaceId = formData.get("spaceId") as string;
-  const { data: space } = await supabase.from("spaces").select("id").eq("id", spaceId).eq("user_id", user.id).single();
-  if (!space) return { ok: false, error: t.errorToast };
+  // getSpaces (not a raw RLS-filtered query) on purpose: RLS's own "select" policy also lets a
+  // *pending* invitee preview the space they've been invited to, which must not be enough to
+  // actually switch into and start editing it before they've accepted.
+  const spaces = await getSpaces(supabase, user.id);
+  if (!spaces.some((s) => s.id === spaceId)) return { ok: false, error: t.errorToast };
 
   const cookieStore = await cookies();
-  cookieStore.set(SPACE_COOKIE, space.id, { path: "/", maxAge: 60 * 60 * 24 * 365 });
+  cookieStore.set(SPACE_COOKIE, spaceId, { path: "/", maxAge: 60 * 60 * 24 * 365 });
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/history");
@@ -934,11 +936,9 @@ export async function updateSpace(formData: FormData): Promise<ActionResult> {
   if (!name) return { ok: false, error: t.errorToast };
   const color = (formData.get("color") as string) || "#10b981";
 
-  const { error } = await supabase
-    .from("spaces")
-    .update({ name, color })
-    .eq("id", formData.get("id"))
-    .eq("user_id", user.id);
+  // No owner-only filter: an accepted member can rename/re-color a shared space too, per the
+  // equal-collaborator model -- RLS (0016_space_sharing.sql) enforces that boundary.
+  const { error } = await supabase.from("spaces").update({ name, color }).eq("id", formData.get("id"));
   if (error) return { ok: false, error: t.errorToast };
 
   revalidatePath("/dashboard");
@@ -959,12 +959,11 @@ export async function deleteSpace(formData: FormData): Promise<DeleteSpaceResult
 
   const spaceId = formData.get("id") as string;
 
-  const { count } = await supabase
-    .from("spaces")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", user.id);
-
-  if ((count ?? 0) <= 1) {
+  // Deleting a space stays owner-only (see below), but the "you need at least one space" guard
+  // checks every space the user can currently reach -- owned or a member of -- since a member
+  // space is just as valid a place to land after deleting an owned one.
+  const spaces = await getSpaces(supabase, user.id);
+  if (spaces.length <= 1) {
     return { ok: false, error: t.spaces.lastSpaceError };
   }
 
@@ -974,13 +973,7 @@ export async function deleteSpace(formData: FormData): Promise<DeleteSpaceResult
   // If the deleted space was the current one, fall back to whichever one is left.
   const cookieStore = await cookies();
   if (cookieStore.get(SPACE_COOKIE)?.value === spaceId) {
-    const { data: remaining } = await supabase
-      .from("spaces")
-      .select("id")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .single();
+    const remaining = spaces.find((s) => s.id !== spaceId);
     if (remaining) cookieStore.set(SPACE_COOKIE, remaining.id, { path: "/", maxAge: 60 * 60 * 24 * 365 });
   }
 
@@ -988,5 +981,101 @@ export async function deleteSpace(formData: FormData): Promise<DeleteSpaceResult
   revalidatePath("/dashboard/history");
   revalidatePath("/dashboard/settings");
 
+  return { ok: true };
+}
+
+export async function inviteMember(formData: FormData): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const t = getDictionary(await getLocale());
+  if (!user) return { ok: false, error: t.common.errorToast };
+
+  const email = (formData.get("email") as string)?.trim().toLowerCase();
+  if (!email) return { ok: false, error: t.common.errorToast };
+  if (email === user.email?.toLowerCase()) return { ok: false, error: t.spaces.inviteSelfError };
+
+  const { currentSpace } = await getCurrentSpace(supabase, user.id);
+  if (!currentSpace.isOwner) return { ok: false, error: t.spaces.inviteNotOwnerError };
+
+  const { error } = await supabase.from("space_members").insert({
+    space_id: currentSpace.id,
+    invited_email: email,
+    invited_by: user.id,
+  });
+  if (error) {
+    // Postgres unique_violation -- this email already has a pending invite or membership here.
+    return { ok: false, error: error.code === "23505" ? t.spaces.inviteDuplicateError : t.common.errorToast };
+  }
+
+  revalidatePath("/dashboard/settings");
+  return { ok: true };
+}
+
+export async function respondToInvite(formData: FormData): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const t = getDictionary(await getLocale()).common;
+  if (!user?.email) return { ok: false, error: t.errorToast };
+
+  const inviteId = formData.get("inviteId") as string;
+  const accept = formData.get("accept") === "true";
+
+  const { error } = accept
+    ? await supabase
+        .from("space_members")
+        .update({ user_id: user.id, status: "accepted", accepted_at: new Date().toISOString() })
+        .eq("id", inviteId)
+        .eq("invited_email", user.email)
+    : await supabase.from("space_members").delete().eq("id", inviteId).eq("invited_email", user.email);
+  if (error) return { ok: false, error: t.errorToast };
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/settings");
+  return { ok: true };
+}
+
+export async function removeMember(formData: FormData): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const t = getDictionary(await getLocale()).common;
+  if (!user) return { ok: false, error: t.errorToast };
+
+  // Owner-only in practice: RLS's "Owner manages members or invitee accepts" policy also lets a
+  // member remove themself, but this action is only wired up from the owner-facing members list
+  // -- see leaveSpace for the member-facing equivalent.
+  const { error } = await supabase.from("space_members").delete().eq("id", formData.get("memberId"));
+  if (error) return { ok: false, error: t.errorToast };
+
+  revalidatePath("/dashboard/settings");
+  return { ok: true };
+}
+
+export async function leaveSpace(formData: FormData): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const t = getDictionary(await getLocale()).common;
+  if (!user) return { ok: false, error: t.errorToast };
+
+  const spaceId = formData.get("spaceId") as string;
+  const { error } = await supabase.from("space_members").delete().eq("space_id", spaceId).eq("user_id", user.id);
+  if (error) return { ok: false, error: t.errorToast };
+
+  const cookieStore = await cookies();
+  if (cookieStore.get(SPACE_COOKIE)?.value === spaceId) {
+    const spaces = await getSpaces(supabase, user.id);
+    const remaining = spaces.find((s) => s.id !== spaceId);
+    if (remaining) cookieStore.set(SPACE_COOKIE, remaining.id, { path: "/", maxAge: 60 * 60 * 24 * 365 });
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/settings");
   return { ok: true };
 }

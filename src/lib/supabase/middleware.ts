@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/signup", "/auth"];
+const PUBLIC_PATHS = ["/login", "/signup", "/auth", "/forgot-password", "/reset-password"];
 
 // Headers carrying the identity this middleware already verified over the network, so
 // downstream Server Components (getAuthenticatedUser) can trust it instead of paying for
@@ -57,7 +57,29 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && (request.nextUrl.pathname === "/login" || request.nextUrl.pathname === "/signup")) {
+  // A session with a verified TOTP factor but only aal1 (e.g. resumed from a stale cookie, or
+  // the /login/mfa step was skipped by navigating straight to a URL) must be stopped here, not
+  // just at the login form -- otherwise MFA is only a login-time UI step, not an enforced one.
+  const isMfaChallengePath = request.nextUrl.pathname === "/login/mfa";
+  let mfaStepUpNeeded = false;
+  if (user) {
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    mfaStepUpNeeded = !!aal && aal.nextLevel === "aal2" && aal.nextLevel !== aal.currentLevel;
+  }
+
+  if (user && mfaStepUpNeeded && !isMfaChallengePath) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login/mfa";
+    return NextResponse.redirect(url);
+  }
+
+  if (user && !mfaStepUpNeeded && isMfaChallengePath) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/dashboard";
+    return NextResponse.redirect(url);
+  }
+
+  if (user && !mfaStepUpNeeded && (request.nextUrl.pathname === "/login" || request.nextUrl.pathname === "/signup")) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);

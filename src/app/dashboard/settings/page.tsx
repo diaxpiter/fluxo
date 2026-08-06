@@ -9,6 +9,8 @@ import { RecurringBillsManager } from "@/app/dashboard/recurring-bills-manager";
 import { IncomeSourcesManager } from "@/app/dashboard/income-sources-manager";
 import { AllocationRulesManager } from "@/app/dashboard/allocation-rules-manager";
 import { SpaceSwitcher } from "@/app/dashboard/space-switcher";
+import { PendingInvitesBanner, SharingManager } from "@/app/dashboard/sharing-manager";
+import { MfaSettings } from "@/app/dashboard/mfa-settings";
 import {
   categoryDisplayName,
   computeAccountBalances,
@@ -17,7 +19,7 @@ import {
   getReceivedIncomeSourceIds,
   getTransactionsForAccounts,
 } from "@/lib/dashboard-data";
-import { getCurrentSpace } from "@/lib/spaces";
+import { getCurrentSpace, getPendingInvites, getSpaceMembers } from "@/lib/spaces";
 import { getDictionary, getLocale } from "@/lib/i18n/dictionary";
 import { cardClass, btnGhostClass } from "@/lib/ui";
 
@@ -36,12 +38,17 @@ export default async function SettingsPage() {
 
   const { accounts, categories, currency, widgetPrefs, recurringBills, incomeSources, allocationRules } =
     await getDashboardContext(supabase, user.id, getProfile(user.id), currentSpace);
-  const [transactions, paidBillOccurrences, receivedSourceIds] = await Promise.all([
-    getTransactionsForAccounts(supabase, accounts.map((a) => a.id)),
-    getPaidRecurringBillOccurrences(supabase),
-    getReceivedIncomeSourceIds(supabase),
-  ]);
+  const [transactions, paidBillOccurrences, receivedSourceIds, pendingInvites, spaceMembers, { data: mfaFactors }] =
+    await Promise.all([
+      getTransactionsForAccounts(supabase, accounts.map((a) => a.id)),
+      getPaidRecurringBillOccurrences(supabase),
+      getReceivedIncomeSourceIds(supabase),
+      user.email ? getPendingInvites(supabase, user.email) : Promise.resolve([]),
+      getSpaceMembers(supabase, currentSpace.id),
+      supabase.auth.mfa.listFactors(),
+    ]);
   const balances = computeAccountBalances(accounts, transactions);
+  const verifiedMfaFactor = mfaFactors?.totp.find((f) => f.status === "verified") ?? null;
 
   return (
     <main className="flex flex-1 flex-col px-4 pb-24 pt-[calc(env(safe-area-inset-top)+2rem)] sm:pt-12 sm:pb-24">
@@ -50,6 +57,8 @@ export default async function SettingsPage() {
           <SpaceSwitcher spaces={spaces} currentSpace={currentSpace} t={t.spaces} common={t.common} />
           <h1 className="text-xl font-semibold tracking-tight">{t.settings.title}</h1>
         </div>
+
+        <PendingInvitesBanner invites={pendingInvites} t={t.spaces} />
 
         <div className="flex flex-col gap-3">
           <h2 className="text-sm font-medium text-foreground/50">{t.settings.widgetsHeading}</h2>
@@ -126,10 +135,20 @@ export default async function SettingsPage() {
         )}
 
         <div className="flex flex-col gap-3">
+          <h2 className="text-sm font-medium text-foreground/50">{t.settings.sharingHeading}</h2>
+          <SharingManager space={currentSpace} members={spaceMembers} currentUserId={user.id} t={t} />
+        </div>
+
+        <div className="flex flex-col gap-3">
           <h2 className="text-sm font-medium text-foreground/50">{t.settings.languageHeading}</h2>
           <div className={`${cardClass} p-4`}>
             <LanguageSelector current={locale} />
           </div>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <h2 className="text-sm font-medium text-foreground/50">{t.settings.securityHeading}</h2>
+          <MfaSettings t={t} initialFactor={verifiedMfaFactor ? { id: verifiedMfaFactor.id } : null} />
         </div>
 
         <div className="flex flex-col gap-3">

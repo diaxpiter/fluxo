@@ -17,6 +17,28 @@ export type Space = {
   created_at: string;
 };
 
+/** A space with membership context resolved for the current viewer. */
+export type SpaceWithRole = Space & { isOwner: boolean };
+
+export type SpaceMemberStatus = "pending" | "accepted";
+
+export type SpaceMember = {
+  id: string;
+  space_id: string;
+  user_id: string | null;
+  invited_email: string;
+  invited_by: string;
+  status: SpaceMemberStatus;
+  created_at: string;
+  accepted_at: string | null;
+};
+
+/** A pending invite joined with the inviting space's identity, for the accept/decline banner. */
+export type PendingInvite = SpaceMember & {
+  space: { id: string; name: string; color: string };
+  inviterDisplayName: string | null;
+};
+
 export type Account = {
   id: string;
   user_id: string;

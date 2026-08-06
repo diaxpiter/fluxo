@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { switchSpace, addSpace, updateSpace, deleteSpace } from "@/app/dashboard/actions";
+import { switchSpace, addSpace, updateSpace, deleteSpace, leaveSpace } from "@/app/dashboard/actions";
 import { fieldClass, btnPrimaryClass, btnGhostClass, btnDestructiveClass, actionLinkClass } from "@/lib/ui";
 import { format } from "@/lib/i18n/format";
 import { notify } from "@/lib/toast";
 import type { Dictionary } from "@/lib/i18n/dictionary";
-import type { Space } from "@/lib/types";
+import type { Space, SpaceWithRole } from "@/lib/types";
 
 const SPACE_COLORS = ["#10b981", "#f59e0b", "#38bdf8", "#a78bfa", "#fb7185", "#2dd4bf", "#94a3b8"];
 
@@ -20,8 +20,8 @@ export function SpaceSwitcher({
   t,
   common,
 }: {
-  spaces: Space[];
-  currentSpace: Space;
+  spaces: SpaceWithRole[];
+  currentSpace: SpaceWithRole;
   t: Dictionary["spaces"];
   common: Dictionary["common"];
 }) {
@@ -118,7 +118,7 @@ function SpaceRow({
   common,
   onSwitched,
 }: {
-  space: Space;
+  space: SpaceWithRole;
   active: boolean;
   canDelete: boolean;
   t: Dictionary["spaces"];
@@ -177,9 +177,73 @@ function SpaceRow({
         <button type="button" onClick={() => setEditing(true)} className={actionLinkClass}>
           {common.edit}
         </button>
-        {canDelete && <DeleteSpaceButton space={space} t={t} common={common} />}
+        {space.isOwner
+          ? canDelete && <DeleteSpaceButton space={space} t={t} common={common} />
+          : canDelete && <LeaveSpaceButton space={space} t={t} common={common} />}
       </div>
     </div>
+  );
+}
+
+function LeaveSpaceButton({
+  space,
+  t,
+  common,
+}: {
+  space: SpaceWithRole;
+  t: Dictionary["spaces"];
+  common: Dictionary["common"];
+}) {
+  const [open, setOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} className={`${actionLinkClass} hover:text-red-400`}>
+        {t.leaveButton}
+      </button>
+
+      {open && (
+        <div
+          className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center"
+          onClick={() => setOpen(false)}
+        >
+          <div
+            className="animate-modal-in w-full max-w-sm rounded-2xl border border-foreground/10 bg-background p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold tracking-tight">{t.leaveConfirmTitle}</h2>
+            <p className="mt-2 text-sm text-foreground/60">{format(t.leaveConfirmBody, { name: space.name })}</p>
+            {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button type="button" onClick={() => setOpen(false)} className={btnGhostClass}>
+                {common.cancel}
+              </button>
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() => {
+                  const formData = new FormData();
+                  formData.set("spaceId", space.id);
+                  startTransition(async () => {
+                    const result = await leaveSpace(formData);
+                    if (result.ok) {
+                      setOpen(false);
+                    } else {
+                      setError(result.error);
+                    }
+                  });
+                }}
+                className={`${btnDestructiveClass} w-full`}
+              >
+                {t.leaveButton}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
