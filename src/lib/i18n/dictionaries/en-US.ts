@@ -17,6 +17,7 @@ export const en_US: Dictionary = {
     account: "Account",
     savedToast: "Saved",
     deletedToast: "Deleted",
+    errorToast: "Something went wrong. Please try again.",
   },
   categories: {
     income: "Income",
@@ -116,6 +117,7 @@ export const en_US: Dictionary = {
     moneyOut: "Money out",
     deleteTitle: "Delete transaction?",
     deleteBody: '"{description}" ({amount}) will be permanently deleted.',
+    linkedEditError: "This transaction is linked to a transfer, bill, or income source. Delete and re-add it instead of editing.",
   },
   addTransaction: {
     addButtonLabel: "Add transaction",
@@ -262,6 +264,10 @@ export const en_US: Dictionary = {
     summary: "Imported {count} transactions. Starting balance set to {balance}.",
     summaryNoBalance:
       "Imported {count} transactions. No balance column found, so the starting balance wasn't touched — set it manually in Settings if needed.",
+    summaryBalanceSkippedNotFirst:
+      "Imported {count} transactions. Starting balance left unchanged — it's only set from an account's first import.",
+    skippedRowsWarning: "{count} row(s) were skipped (blank description or invalid amount).",
+    expectedLabel: "expected {amount}",
     done: "Done",
   },
   onboarding: {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useTransition } from "react";
 import { addCategory } from "@/app/dashboard/actions";
 import { fieldClass, linkClass } from "@/lib/ui";
 import { notify } from "@/lib/toast";
@@ -19,6 +19,7 @@ export function AddCategoryInline({
   onCreated: (category: Category) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
 
   if (!open) {
@@ -32,14 +33,18 @@ export function AddCategoryInline({
   return (
     <form
       ref={formRef}
-      action={async (formData) => {
-        const category = await addCategory(formData);
-        if (category) {
-          onCreated(category);
-          notify(common.savedToast);
-        }
-        formRef.current?.reset();
-        setOpen(false);
+      action={(formData) => {
+        startTransition(async () => {
+          const category = await addCategory(formData);
+          if (category) {
+            onCreated(category);
+            notify(common.savedToast);
+          } else {
+            notify(common.errorToast, "error");
+          }
+          formRef.current?.reset();
+          setOpen(false);
+        });
       }}
       className="mt-1 flex items-center gap-2"
     >
@@ -51,7 +56,7 @@ export function AddCategoryInline({
         placeholder={t.namePlaceholder}
         className={`${fieldClass} w-full py-1 text-xs`}
       />
-      <button type="submit" className={`${linkClass} shrink-0 text-xs`}>
+      <button type="submit" disabled={isPending} className={`${linkClass} shrink-0 text-xs`}>
         {common.save}
       </button>
       <button type="button" onClick={() => setOpen(false)} className={`${linkClass} shrink-0 text-xs`}>

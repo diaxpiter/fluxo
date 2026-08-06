@@ -57,7 +57,8 @@ export function AllocationRulesManager({
       startTransition(async () => {
         const formData = new FormData();
         next.forEach((ruleId) => formData.append("order", ruleId));
-        await updateAllocationRuleOrder(formData);
+        const result = await updateAllocationRuleOrder(formData);
+        if (!result.ok) notify(result.error, "error");
       });
 
       return next;
@@ -163,8 +164,8 @@ function RuleRow({
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
         <form
           action={async (formData) => {
-            await updateAllocationRule(formData);
-            notify(t.common.savedToast);
+            const result = await updateAllocationRule(formData);
+            notify(result.ok ? t.common.savedToast : result.error, result.ok ? "success" : "error");
           }}
           onChange={(e) => e.currentTarget.requestSubmit()}
         >
@@ -249,8 +250,8 @@ function DeleteRuleButton({
               </button>
               <form
                 action={async (formData) => {
-                  await deleteAllocationRule(formData);
-                  notify(t.common.deletedToast);
+                  const result = await deleteAllocationRule(formData);
+                  notify(result.ok ? t.common.deletedToast : result.error, result.ok ? "success" : "error");
                 }}
               >
                 <input type="hidden" name="id" value={rule.id} />
@@ -283,9 +284,13 @@ function RuleForm({
   return (
     <form
       action={async (formData) => {
-        await action(formData);
-        notify(t.common.savedToast);
-        onDone();
+        const result = await action(formData);
+        if (result.ok) {
+          notify(t.common.savedToast);
+          onDone();
+        } else {
+          notify(result.error, "error");
+        }
       }}
       className={`${cardClass} flex flex-col gap-3 p-4`}
     >

@@ -44,18 +44,20 @@ export function MonthGroup({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`${cardClass} grid w-full grid-cols-[1fr_6rem_6rem_6rem] items-center gap-3 p-4 text-left transition-colors duration-150 hover:bg-foreground/[0.06]`}
+        className={`${cardClass} flex w-full flex-col gap-2 p-4 text-left transition-colors duration-150 hover:bg-foreground/[0.06] sm:grid sm:grid-cols-[1fr_6rem_6rem_6rem] sm:items-center sm:gap-3`}
       >
         <span className="truncate text-sm font-medium">{label}</span>
-        <span className={`whitespace-nowrap text-right text-xs text-emerald-500 ${numericClass}`}>
-          +{formatCurrency(moneyIn, currency, locale)}
-        </span>
-        <span className={`whitespace-nowrap text-right text-xs text-red-400 ${numericClass}`}>
-          -{formatCurrency(moneyOut, currency, locale)}
-        </span>
-        <span className={`whitespace-nowrap text-right text-xs font-medium text-foreground ${numericClass}`}>
-          {formatCurrency(finalBalance, currency, locale)}
-        </span>
+        <div className="flex items-center justify-between gap-3 sm:contents">
+          <span className={`text-xs text-emerald-500 sm:whitespace-nowrap sm:text-right ${numericClass}`}>
+            +{formatCurrency(moneyIn, currency, locale)}
+          </span>
+          <span className={`text-xs text-red-400 sm:whitespace-nowrap sm:text-right ${numericClass}`}>
+            -{formatCurrency(moneyOut, currency, locale)}
+          </span>
+          <span className={`text-xs font-medium text-foreground sm:whitespace-nowrap sm:text-right ${numericClass}`}>
+            {formatCurrency(finalBalance, currency, locale)}
+          </span>
+        </div>
       </button>
 
       {open && (

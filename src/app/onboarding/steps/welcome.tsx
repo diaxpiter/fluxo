@@ -32,7 +32,12 @@ export function WelcomeStep({ t, locale }: StepProps) {
         <p className="text-sm text-foreground/50">{t.onboarding.welcomeStep.languageLabel}</p>
         <div className="flex flex-wrap justify-center gap-2">
           {LOCALES.map((l) => (
-            <form key={l.code} action={updateLanguage}>
+            <form
+              key={l.code}
+              action={async (formData) => {
+                await updateLanguage(formData);
+              }}
+            >
               <input type="hidden" name="language" value={l.code} />
               <button type="submit" className={l.code === locale ? btnPrimaryClass : btnGhostClass}>
                 {l.nativeName}

@@ -24,6 +24,7 @@ export type Dictionary = {
     account: string;
     savedToast: string;
     deletedToast: string;
+    errorToast: string;
   };
   /** Labels for the literal English category names the signup trigger seeds every account with. */
   categories: {
@@ -110,6 +111,8 @@ export type Dictionary = {
     deleteTitle: string;
     /** Placeholders: {description}, {amount} */
     deleteBody: string;
+    /** Shown when trying to edit one leg of a transfer, or a bill/income-linked row -- delete and redo instead. */
+    linkedEditError: string;
   };
   addTransaction: {
     addButtonLabel: string;
@@ -265,6 +268,12 @@ export type Dictionary = {
     summary: string;
     /** Placeholder: {count} */
     summaryNoBalance: string;
+    /** Placeholder: {count}. Shown when a balance column is present but this isn't the account's first import. */
+    summaryBalanceSkippedNotFirst: string;
+    /** Placeholder: {count} */
+    skippedRowsWarning: string;
+    /** Placeholder: {amount} */
+    expectedLabel: string;
     done: string;
   };
   onboarding: {

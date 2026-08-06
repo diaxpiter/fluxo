@@ -147,8 +147,12 @@ function SpaceRow({
             return;
           }
           startTransition(async () => {
-            await switchSpace(formData);
-            onSwitched();
+            const result = await switchSpace(formData);
+            if (result.ok) {
+              onSwitched();
+            } else {
+              notify(result.error, "error");
+            }
           });
         }}
       >
@@ -265,9 +269,13 @@ function SpaceForm({
       action={(formData) => {
         startTransition(async () => {
           if (space) {
-            await updateSpace(formData);
-            notify(common.savedToast);
-            onDone();
+            const updateResult = await updateSpace(formData);
+            if (updateResult.ok) {
+              notify(common.savedToast);
+              onDone();
+            } else {
+              setError(updateResult.error);
+            }
             return;
           }
           const result = await addSpace(formData);

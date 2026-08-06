@@ -153,8 +153,8 @@ function SourceRow({
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
         <form
           action={async (formData) => {
-            await updateIncomeSource(formData);
-            notify(t.common.savedToast);
+            const result = await updateIncomeSource(formData);
+            notify(result.ok ? t.common.savedToast : result.error, result.ok ? "success" : "error");
           }}
           onChange={(e) => e.currentTarget.requestSubmit()}
         >
@@ -262,9 +262,13 @@ function ReceiveButton({
               ref={formRef}
               action={(formData) => {
                 startTransition(async () => {
-                  await receiveIncomeSource(formData);
-                  notify(t.common.savedToast);
-                  setOpen(false);
+                  const result = await receiveIncomeSource(formData);
+                  if (result.ok) {
+                    notify(t.common.savedToast);
+                    setOpen(false);
+                  } else {
+                    notify(result.error, "error");
+                  }
                 });
               }}
               className="flex flex-col gap-4"
@@ -359,8 +363,8 @@ function DeleteSourceButton({ source, t }: { source: IncomeSource; t: Dictionary
               </button>
               <form
                 action={async (formData) => {
-                  await deleteIncomeSource(formData);
-                  notify(t.common.deletedToast);
+                  const result = await deleteIncomeSource(formData);
+                  notify(result.ok ? t.common.deletedToast : result.error, result.ok ? "success" : "error");
                 }}
               >
                 <input type="hidden" name="id" value={source.id} />
@@ -396,9 +400,13 @@ function SourceForm({
   return (
     <form
       action={async (formData) => {
-        await action(formData);
-        notify(t.common.savedToast);
-        onDone();
+        const result = await action(formData);
+        if (result.ok) {
+          notify(t.common.savedToast);
+          onDone();
+        } else {
+          notify(result.error, "error");
+        }
       }}
       className={`${cardClass} flex flex-col gap-3 p-4`}
     >

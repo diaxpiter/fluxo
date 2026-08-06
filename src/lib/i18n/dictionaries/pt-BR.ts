@@ -17,6 +17,7 @@ export const pt_BR: Dictionary = {
     account: "Conta",
     savedToast: "Salvo",
     deletedToast: "Excluído",
+    errorToast: "Algo deu errado. Tente novamente.",
   },
   categories: {
     income: "Receita",
@@ -116,6 +117,7 @@ export const pt_BR: Dictionary = {
     moneyOut: "Saída",
     deleteTitle: "Excluir transação?",
     deleteBody: '"{description}" ({amount}) será excluída permanentemente.',
+    linkedEditError: "Esta transação está vinculada a uma transferência, conta ou fonte de renda. Exclua e adicione novamente em vez de editar.",
   },
   addTransaction: {
     addButtonLabel: "Adicionar transação",
@@ -262,6 +264,10 @@ export const pt_BR: Dictionary = {
     summary: "{count} transações importadas. Saldo inicial definido para {balance}.",
     summaryNoBalance:
       "{count} transações importadas. Nenhuma coluna de saldo foi encontrada, então o saldo inicial não foi alterado — defina-o manualmente nas Configurações, se necessário.",
+    summaryBalanceSkippedNotFirst:
+      "{count} transações importadas. O saldo inicial não foi alterado — ele só é definido na primeira importação de uma conta.",
+    skippedRowsWarning: "{count} linha(s) foram ignoradas (descrição em branco ou valor inválido).",
+    expectedLabel: "esperado {amount}",
     done: "Concluído",
   },
   onboarding: {

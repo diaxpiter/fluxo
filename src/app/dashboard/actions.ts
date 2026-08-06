@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import type { WidgetKey, WidgetPref } from "@/lib/widgets";
 import { parseWorkbook, type MonthCheck } from "@/lib/import-excel";
@@ -13,64 +14,104 @@ import { computeAllocation } from "@/lib/allocation";
 import { SPACE_COOKIE, getCurrentSpace } from "@/lib/spaces";
 import type { Account, AllocationRule, BillRecurrenceType, Category, Space } from "@/lib/types";
 
+export type ActionResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Resolves a client-submitted id to itself only if it actually belongs to this user.
+ * category_id/recurring_bill_id/income_source_id are plain FKs with no RLS check of their
+ * own (unlike account_id/target_account_id) -- without this, a tampered request could attach
+ * a transaction to another user's category/bill/income source.
+ */
+async function ownedId(
+  supabase: SupabaseClient,
+  table: "categories" | "recurring_bills" | "income_sources",
+  id: FormDataEntryValue | null,
+  userId: string,
+): Promise<string | null> {
+  if (!id) return null;
+  const { data } = await supabase.from(table).select("id").eq("id", id).eq("user_id", userId).single();
+  return data?.id ?? null;
+}
+
 function signedAmount(formData: FormData) {
   const magnitude = Math.abs(Number(formData.get("amount")));
   const direction = formData.get("direction");
   return direction === "out" ? -magnitude : magnitude;
 }
 
-export async function addTransaction(formData: FormData) {
+export async function addTransaction(formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  const t = getDictionary(await getLocale()).common;
+  if (!user) return { ok: false, error: t.errorToast };
 
-  const categoryId = formData.get("categoryId");
+  const categoryId = await ownedId(supabase, "categories", formData.get("categoryId"), user.id);
 
-  await supabase.from("transactions").insert({
+  const { error } = await supabase.from("transactions").insert({
     user_id: user.id,
     account_id: formData.get("accountId"),
-    category_id: categoryId ? categoryId : null,
+    category_id: categoryId,
     date: formData.get("date"),
     description: formData.get("description"),
     amount: signedAmount(formData),
   });
+  if (error) return { ok: false, error: t.errorToast };
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/history");
+  return { ok: true };
 }
 
-export async function updateTransaction(formData: FormData) {
+export async function updateTransaction(formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  const dict = getDictionary(await getLocale());
+  if (!user) return { ok: false, error: dict.common.errorToast };
 
-  const categoryId = formData.get("categoryId");
+  const id = formData.get("id");
+  const { data: existing } = await supabase
+    .from("transactions")
+    .select("transfer_group_id, recurring_bill_id, income_source_id")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .single();
 
-  await supabase
+  // Editing one leg of a transfer (or a bill/income-linked row) in place would desync it from
+  // its pair / from the "already paid this month" tracking -- delete and re-add instead.
+  if (existing?.transfer_group_id || existing?.recurring_bill_id || existing?.income_source_id) {
+    return { ok: false, error: dict.transactionList.linkedEditError };
+  }
+
+  const categoryId = await ownedId(supabase, "categories", formData.get("categoryId"), user.id);
+
+  const { error } = await supabase
     .from("transactions")
     .update({
-      category_id: categoryId ? categoryId : null,
+      category_id: categoryId,
       date: formData.get("date"),
       description: formData.get("description"),
       amount: signedAmount(formData),
     })
-    .eq("id", formData.get("id"))
+    .eq("id", id)
     .eq("user_id", user.id);
+  if (error) return { ok: false, error: dict.common.errorToast };
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/history");
+  return { ok: true };
 }
 
-export async function deleteTransaction(formData: FormData) {
+export async function deleteTransaction(formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  const t = getDictionary(await getLocale()).common;
+  if (!user) return { ok: false, error: t.errorToast };
 
   const id = formData.get("id");
   const { data: transaction } = await supabase
@@ -80,50 +121,51 @@ export async function deleteTransaction(formData: FormData) {
     .eq("user_id", user.id)
     .single();
 
-  if (transaction?.transfer_group_id) {
+  const { error } = transaction?.transfer_group_id
     // Delete both legs of the transfer together so the ledgers never go out of sync.
-    await supabase
-      .from("transactions")
-      .delete()
-      .eq("transfer_group_id", transaction.transfer_group_id)
-      .eq("user_id", user.id);
-  } else {
-    await supabase.from("transactions").delete().eq("id", id).eq("user_id", user.id);
-  }
+    ? await supabase.from("transactions").delete().eq("transfer_group_id", transaction.transfer_group_id).eq("user_id", user.id)
+    : await supabase.from("transactions").delete().eq("id", id).eq("user_id", user.id);
+  if (error) return { ok: false, error: t.errorToast };
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/history");
+  return { ok: true };
 }
 
-export async function updateStartingBalance(formData: FormData) {
+export async function updateStartingBalance(formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  const t = getDictionary(await getLocale()).common;
+  if (!user) return { ok: false, error: t.errorToast };
 
-  await supabase
+  const { error } = await supabase
     .from("accounts")
     .update({ starting_balance: Number(formData.get("startingBalance")) })
     .eq("id", formData.get("accountId"))
     .eq("user_id", user.id);
+  if (error) return { ok: false, error: t.errorToast };
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/history");
   revalidatePath("/dashboard/settings");
+  return { ok: true };
 }
 
-export async function updateLanguage(formData: FormData) {
+export async function updateLanguage(formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  const t = getDictionary(await getLocale()).common;
+  if (!user) return { ok: false, error: t.errorToast };
 
   const language = formData.get("language") as string | null;
-  if (!isLocale(language)) return;
+  if (!isLocale(language)) return { ok: false, error: t.errorToast };
 
-  await supabase.from("profiles").update({ language }).eq("id", user.id);
+  const { error } = await supabase.from("profiles").update({ language }).eq("id", user.id);
+  if (error) return { ok: false, error: t.errorToast };
 
   const cookieStore = await cookies();
   cookieStore.set(LOCALE_COOKIE, language, { path: "/", maxAge: 60 * 60 * 24 * 365 });
@@ -131,14 +173,16 @@ export async function updateLanguage(formData: FormData) {
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/history");
   revalidatePath("/dashboard/settings");
+  return { ok: true };
 }
 
-export async function updateWidgetPrefs(formData: FormData) {
+export async function updateWidgetPrefs(formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  const t = getDictionary(await getLocale()).common;
+  if (!user) return { ok: false, error: t.errorToast };
 
   const orderedKeys = formData.getAll("order") as WidgetKey[];
   const widgets: WidgetPref[] = orderedKeys.map((key) => ({
@@ -148,14 +192,25 @@ export async function updateWidgetPrefs(formData: FormData) {
   }));
 
   const { currentSpace } = await getCurrentSpace(supabase, user.id);
-  await supabase.from("spaces").update({ widgets }).eq("id", currentSpace.id).eq("user_id", user.id);
+  const { error } = await supabase.from("spaces").update({ widgets }).eq("id", currentSpace.id).eq("user_id", user.id);
+  if (error) return { ok: false, error: t.errorToast };
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
+  return { ok: true };
 }
 
 export type ImportResult =
-  | { ok: true; insertedCount: number; startingBalance: number; startingBalanceKnown: boolean; monthChecks: MonthCheck[] }
+  | {
+      ok: true;
+      insertedCount: number;
+      skippedCount: number;
+      startingBalance: number;
+      startingBalanceKnown: boolean;
+      /** False when a balance column was present but this wasn't the account's first import -- see below. */
+      startingBalanceApplied: boolean;
+      monthChecks: MonthCheck[];
+    }
   | { ok: false; error: string };
 
 export async function importTransactions(formData: FormData): Promise<ImportResult> {
@@ -163,10 +218,10 @@ export async function importTransactions(formData: FormData): Promise<ImportResu
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
-
   const locale = await getLocale();
-  const t = getDictionary(locale).importTransactions;
+  const dict = getDictionary(locale);
+  const t = dict.importTransactions;
+  if (!user) return { ok: false, error: dict.common.errorToast };
 
   const accountId = formData.get("accountId") as string;
   const file = formData.get("file") as File | null;
@@ -184,26 +239,39 @@ export async function importTransactions(formData: FormData): Promise<ImportResu
     return { ok: false, error: t.noTransactionsFound };
   }
 
-  if (parsed.startingBalanceKnown) {
+  // A balance column only reflects this account's true inception balance on its FIRST
+  // import -- a later statement's balance column describes a mid-history snapshot, not
+  // the starting point, and must never overwrite it.
+  const { count: existingCount } = await supabase
+    .from("transactions")
+    .select("id", { count: "exact", head: true })
+    .eq("account_id", accountId)
+    .eq("user_id", user.id);
+  const isFirstImportForAccount = (existingCount ?? 0) === 0;
+
+  const { error: insertError } = await supabase.from("transactions").insert(
+    parsed.transactions.map((row) => ({
+      user_id: user.id,
+      account_id: accountId,
+      category_id: null,
+      date: row.date,
+      description: row.description,
+      amount: row.amount,
+    })),
+  );
+  if (insertError) return { ok: false, error: dict.common.errorToast };
+
+  // Only touch starting_balance after the transactions themselves are safely in --
+  // never leave the account's balance changed if nothing was actually imported.
+  let startingBalanceApplied = false;
+  if (parsed.startingBalanceKnown && isFirstImportForAccount) {
     const { error: balanceError } = await supabase
       .from("accounts")
       .update({ starting_balance: parsed.startingBalance })
       .eq("id", accountId)
       .eq("user_id", user.id);
-    if (balanceError) return { ok: false, error: balanceError.message };
+    startingBalanceApplied = !balanceError;
   }
-
-  const { error: insertError } = await supabase.from("transactions").insert(
-    parsed.transactions.map((t) => ({
-      user_id: user.id,
-      account_id: accountId,
-      category_id: null,
-      date: t.date,
-      description: t.description,
-      amount: t.amount,
-    })),
-  );
-  if (insertError) return { ok: false, error: insertError.message };
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/history");
@@ -211,8 +279,10 @@ export async function importTransactions(formData: FormData): Promise<ImportResu
   return {
     ok: true,
     insertedCount: parsed.transactions.length,
+    skippedCount: parsed.skippedCount,
     startingBalance: parsed.startingBalance,
     startingBalanceKnown: parsed.startingBalanceKnown,
+    startingBalanceApplied,
     monthChecks: parsed.monthChecks,
   };
 }
@@ -241,78 +311,93 @@ function recurringBillFields(formData: FormData) {
   };
 }
 
-export async function addRecurringBill(formData: FormData) {
+export async function addRecurringBill(formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  const t = getDictionary(await getLocale()).common;
+  if (!user) return { ok: false, error: t.errorToast };
 
   const { currentSpace } = await getCurrentSpace(supabase, user.id);
 
-  await supabase.from("recurring_bills").insert({
+  const { error } = await supabase.from("recurring_bills").insert({
     user_id: user.id,
     space_id: currentSpace.id,
     ...recurringBillFields(formData),
   });
+  if (error) return { ok: false, error: t.errorToast };
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
+  return { ok: true };
 }
 
-export async function updateRecurringBill(formData: FormData) {
+export async function updateRecurringBill(formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  const t = getDictionary(await getLocale()).common;
+  if (!user) return { ok: false, error: t.errorToast };
 
-  await supabase
+  const { error } = await supabase
     .from("recurring_bills")
     .update(recurringBillFields(formData))
     .eq("id", formData.get("id"))
     .eq("user_id", user.id);
+  if (error) return { ok: false, error: t.errorToast };
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
+  return { ok: true };
 }
 
-export async function deleteRecurringBill(formData: FormData) {
+export async function deleteRecurringBill(formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  const t = getDictionary(await getLocale()).common;
+  if (!user) return { ok: false, error: t.errorToast };
 
-  await supabase.from("recurring_bills").delete().eq("id", formData.get("id")).eq("user_id", user.id);
+  const { error } = await supabase.from("recurring_bills").delete().eq("id", formData.get("id")).eq("user_id", user.id);
+  if (error) return { ok: false, error: t.errorToast };
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
+  return { ok: true };
 }
 
-export async function payRecurringBill(formData: FormData) {
+export async function payRecurringBill(formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  const t = getDictionary(await getLocale()).common;
+  if (!user) return { ok: false, error: t.errorToast };
 
-  const categoryId = formData.get("categoryId");
+  const categoryId = await ownedId(supabase, "categories", formData.get("categoryId"), user.id);
+  const billId = await ownedId(supabase, "recurring_bills", formData.get("billId"), user.id);
+  if (!billId) return { ok: false, error: t.errorToast };
   const magnitude = Math.abs(Number(formData.get("amount")));
+  if (!magnitude) return { ok: false, error: t.errorToast };
 
-  await supabase.from("transactions").insert({
+  const { error } = await supabase.from("transactions").insert({
     user_id: user.id,
     account_id: formData.get("accountId"),
-    category_id: categoryId ? categoryId : null,
+    category_id: categoryId,
     date: formData.get("date"),
     description: formData.get("description"),
     amount: -magnitude,
-    recurring_bill_id: formData.get("billId"),
+    recurring_bill_id: billId,
   });
+  if (error) return { ok: false, error: t.errorToast };
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/history");
   revalidatePath("/dashboard/settings");
+  return { ok: true };
 }
 
 function incomeSourceFields(formData: FormData) {
@@ -336,76 +421,89 @@ function incomeSourceFields(formData: FormData) {
   };
 }
 
-export async function addIncomeSource(formData: FormData) {
+export async function addIncomeSource(formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  const t = getDictionary(await getLocale()).common;
+  if (!user) return { ok: false, error: t.errorToast };
 
   const { currentSpace } = await getCurrentSpace(supabase, user.id);
 
-  await supabase.from("income_sources").insert({
+  const { error } = await supabase.from("income_sources").insert({
     user_id: user.id,
     space_id: currentSpace.id,
     ...incomeSourceFields(formData),
   });
+  if (error) return { ok: false, error: t.errorToast };
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
+  return { ok: true };
 }
 
-export async function updateIncomeSource(formData: FormData) {
+export async function updateIncomeSource(formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  const t = getDictionary(await getLocale()).common;
+  if (!user) return { ok: false, error: t.errorToast };
 
-  await supabase
+  const { error } = await supabase
     .from("income_sources")
     .update(incomeSourceFields(formData))
     .eq("id", formData.get("id"))
     .eq("user_id", user.id);
+  if (error) return { ok: false, error: t.errorToast };
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
+  return { ok: true };
 }
 
-export async function deleteIncomeSource(formData: FormData) {
+export async function deleteIncomeSource(formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  const t = getDictionary(await getLocale()).common;
+  if (!user) return { ok: false, error: t.errorToast };
 
-  await supabase.from("income_sources").delete().eq("id", formData.get("id")).eq("user_id", user.id);
+  const { error } = await supabase.from("income_sources").delete().eq("id", formData.get("id")).eq("user_id", user.id);
+  if (error) return { ok: false, error: t.errorToast };
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
+  return { ok: true };
 }
 
-export async function receiveIncomeSource(formData: FormData) {
+export async function receiveIncomeSource(formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  const t = getDictionary(await getLocale());
+  if (!user) return { ok: false, error: t.common.errorToast };
 
-  const categoryId = formData.get("categoryId");
+  const categoryId = await ownedId(supabase, "categories", formData.get("categoryId"), user.id);
+  const sourceId = await ownedId(supabase, "income_sources", formData.get("sourceId"), user.id);
+  if (!sourceId) return { ok: false, error: t.common.errorToast };
   const accountId = formData.get("accountId") as string;
   const magnitude = Math.abs(Number(formData.get("amount")));
+  if (!magnitude) return { ok: false, error: t.common.errorToast };
   const date = formData.get("date");
 
   const rows: Record<string, unknown>[] = [
     {
       user_id: user.id,
       account_id: accountId,
-      category_id: categoryId ? categoryId : null,
+      category_id: categoryId,
       date,
       description: formData.get("description"),
       amount: magnitude,
-      income_source_id: formData.get("sourceId"),
+      income_source_id: sourceId,
     },
   ];
 
@@ -417,7 +515,6 @@ export async function receiveIncomeSource(formData: FormData) {
   ]);
 
   const accountList = (accounts as Account[] | null) ?? [];
-  const t = getDictionary(await getLocale());
   const sourceAccount = accountList.find((a) => a.id === accountId);
   const sourceName = sourceAccount ? accountDisplayName(sourceAccount, t.common.mainAccount) : "";
 
@@ -452,11 +549,13 @@ export async function receiveIncomeSource(formData: FormData) {
     );
   }
 
-  await supabase.from("transactions").insert(rows);
+  const { error } = await supabase.from("transactions").insert(rows);
+  if (error) return { ok: false, error: t.common.errorToast };
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/history");
   revalidatePath("/dashboard/settings");
+  return { ok: true };
 }
 
 function accountFields(formData: FormData) {
@@ -467,57 +566,76 @@ function accountFields(formData: FormData) {
   };
 }
 
-export async function addAccount(formData: FormData) {
+export async function addAccount(formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  const t = getDictionary(await getLocale()).common;
+  if (!user) return { ok: false, error: t.errorToast };
 
   const { currentSpace } = await getCurrentSpace(supabase, user.id);
 
-  await supabase.from("accounts").insert({
+  const { error } = await supabase.from("accounts").insert({
     user_id: user.id,
     space_id: currentSpace.id,
     starting_balance: Number(formData.get("startingBalance")) || 0,
     ...accountFields(formData),
   });
+  if (error) return { ok: false, error: t.errorToast };
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/history");
   revalidatePath("/dashboard/settings");
+  return { ok: true };
 }
 
-export async function updateAccount(formData: FormData) {
+export async function updateAccount(formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  const t = getDictionary(await getLocale()).common;
+  if (!user) return { ok: false, error: t.errorToast };
 
-  await supabase
+  const { error } = await supabase
     .from("accounts")
     .update(accountFields(formData))
     .eq("id", formData.get("id"))
     .eq("user_id", user.id);
+  if (error) return { ok: false, error: t.errorToast };
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/history");
   revalidatePath("/dashboard/settings");
+  return { ok: true };
 }
 
-export async function archiveAccount(formData: FormData) {
+export async function archiveAccount(formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  const t = getDictionary(await getLocale()).common;
+  if (!user) return { ok: false, error: t.errorToast };
 
-  await supabase.from("accounts").update({ is_archived: true }).eq("id", formData.get("id")).eq("user_id", user.id);
+  const id = formData.get("id");
+  const { error } = await supabase.from("accounts").update({ is_archived: true }).eq("id", id).eq("user_id", user.id);
+  if (error) return { ok: false, error: t.errorToast };
+
+  // An archived account should stop generating new obligations -- otherwise its bills/income
+  // keep contributing to widgets and "mark as paid"/"receive" can still deposit into an
+  // account the user thought was retired.
+  await Promise.all([
+    supabase.from("recurring_bills").update({ is_active: false }).eq("account_id", id).eq("user_id", user.id),
+    supabase.from("income_sources").update({ is_active: false }).eq("account_id", id).eq("user_id", user.id),
+    supabase.from("allocation_rules").update({ is_active: false }).eq("target_account_id", id).eq("user_id", user.id),
+  ]);
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/history");
   revalidatePath("/dashboard/settings");
+  return { ok: true };
 }
 
 export type TransferResult = { ok: true } | { ok: false; error: string };
@@ -527,9 +645,8 @@ export async function transferBetweenAccounts(formData: FormData): Promise<Trans
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
-
   const t = getDictionary(await getLocale());
+  if (!user) return { ok: false, error: t.common.errorToast };
 
   const fromAccountId = formData.get("fromAccountId") as string;
   const toAccountId = formData.get("toAccountId") as string;
@@ -548,6 +665,7 @@ export async function transferBetweenAccounts(formData: FormData): Promise<Trans
   if (!fromAccount || !toAccount) return { ok: false, error: t.transfer.sameAccountError };
 
   const magnitude = Math.abs(Number(formData.get("amount")));
+  if (!magnitude) return { ok: false, error: t.common.errorToast };
   const date = formData.get("date");
   const description = (formData.get("description") as string)?.trim();
   const transferGroupId = crypto.randomUUID();
@@ -575,7 +693,7 @@ export async function transferBetweenAccounts(formData: FormData): Promise<Trans
     },
   ]);
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: t.common.errorToast };
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/history");
@@ -586,21 +704,26 @@ export async function transferBetweenAccounts(formData: FormData): Promise<Trans
 function allocationRuleFields(formData: FormData) {
   const method = formData.get("method") as string;
   const valueRaw = formData.get("value") as string | null;
+  const magnitude = Math.abs(Number(valueRaw));
 
   return {
     target_account_id: formData.get("targetAccountId"),
     method,
-    value: method === "remainder" ? null : Math.abs(Number(valueRaw)),
+    // A percentage rule beyond 100 can never mean anything (there's nothing left to give more
+    // than "all of it"); clamp rather than silently let computeAllocation's own remaining-clamp
+    // absorb the overshoot with no feedback that the stated number was never really honored.
+    value: method === "remainder" ? null : method === "percentage" ? Math.min(magnitude, 100) : magnitude,
     is_active: formData.get("isActive") === "on",
   };
 }
 
-export async function addAllocationRule(formData: FormData) {
+export async function addAllocationRule(formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  const t = getDictionary(await getLocale()).common;
+  if (!user) return { ok: false, error: t.errorToast };
 
   const { currentSpace } = await getCurrentSpace(supabase, user.id);
 
@@ -610,63 +733,74 @@ export async function addAllocationRule(formData: FormData) {
     .eq("user_id", user.id)
     .eq("space_id", currentSpace.id);
 
-  await supabase.from("allocation_rules").insert({
+  const { error } = await supabase.from("allocation_rules").insert({
     user_id: user.id,
     space_id: currentSpace.id,
     priority_order: count ?? 0,
     ...allocationRuleFields(formData),
   });
+  if (error) return { ok: false, error: t.errorToast };
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
+  return { ok: true };
 }
 
-export async function updateAllocationRule(formData: FormData) {
+export async function updateAllocationRule(formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  const t = getDictionary(await getLocale()).common;
+  if (!user) return { ok: false, error: t.errorToast };
 
-  await supabase
+  const { error } = await supabase
     .from("allocation_rules")
     .update(allocationRuleFields(formData))
     .eq("id", formData.get("id"))
     .eq("user_id", user.id);
+  if (error) return { ok: false, error: t.errorToast };
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
+  return { ok: true };
 }
 
-export async function deleteAllocationRule(formData: FormData) {
+export async function deleteAllocationRule(formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  const t = getDictionary(await getLocale()).common;
+  if (!user) return { ok: false, error: t.errorToast };
 
-  await supabase.from("allocation_rules").delete().eq("id", formData.get("id")).eq("user_id", user.id);
+  const { error } = await supabase.from("allocation_rules").delete().eq("id", formData.get("id")).eq("user_id", user.id);
+  if (error) return { ok: false, error: t.errorToast };
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
+  return { ok: true };
 }
 
-export async function updateAllocationRuleOrder(formData: FormData) {
+export async function updateAllocationRuleOrder(formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  const t = getDictionary(await getLocale()).common;
+  if (!user) return { ok: false, error: t.errorToast };
 
   const orderedIds = formData.getAll("order") as string[];
-  await Promise.all(
+  const results = await Promise.all(
     orderedIds.map((id, index) =>
       supabase.from("allocation_rules").update({ priority_order: index }).eq("id", id).eq("user_id", user.id),
     ),
   );
+  if (results.some((r) => r.error)) return { ok: false, error: t.errorToast };
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
+  return { ok: true };
 }
 
 export async function addCategory(formData: FormData): Promise<Category | null> {
@@ -680,6 +814,17 @@ export async function addCategory(formData: FormData): Promise<Category | null> 
   if (!name) return null;
 
   const { currentSpace } = await getCurrentSpace(supabase, user.id);
+
+  // Reuse an existing category with the same name (case-insensitive) instead of creating a
+  // silent duplicate that would fragment that category's spend across two indistinguishable rows.
+  const { data: existing } = await supabase
+    .from("categories")
+    .select()
+    .eq("user_id", user.id)
+    .eq("space_id", currentSpace.id)
+    .ilike("name", name)
+    .maybeSingle();
+  if (existing) return existing as Category;
 
   const { data, error } = await supabase
     .from("categories")
@@ -711,16 +856,17 @@ const STARTER_CATEGORIES = [
   { name: "Other", kind: "other" },
 ];
 
-export async function switchSpace(formData: FormData) {
+export async function switchSpace(formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  const t = getDictionary(await getLocale()).common;
+  if (!user) return { ok: false, error: t.errorToast };
 
   const spaceId = formData.get("spaceId") as string;
   const { data: space } = await supabase.from("spaces").select("id").eq("id", spaceId).eq("user_id", user.id).single();
-  if (!space) return;
+  if (!space) return { ok: false, error: t.errorToast };
 
   const cookieStore = await cookies();
   cookieStore.set(SPACE_COOKIE, space.id, { path: "/", maxAge: 60 * 60 * 24 * 365 });
@@ -728,6 +874,7 @@ export async function switchSpace(formData: FormData) {
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/history");
   revalidatePath("/dashboard/settings");
+  return { ok: true };
 }
 
 export type AddSpaceResult = { ok: true; space: Space } | { ok: false; error: string };
@@ -737,10 +884,11 @@ export async function addSpace(formData: FormData): Promise<AddSpaceResult> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  const t = getDictionary(await getLocale()).common;
+  if (!user) return { ok: false, error: t.errorToast };
 
   const name = (formData.get("name") as string)?.trim();
-  if (!name) return { ok: false, error: "Name is required." };
+  if (!name) return { ok: false, error: t.errorToast };
   const color = (formData.get("color") as string) || "#10b981";
 
   const { data: space, error } = await supabase
@@ -748,19 +896,21 @@ export async function addSpace(formData: FormData): Promise<AddSpaceResult> {
     .insert({ user_id: user.id, name, color })
     .select()
     .single();
-  if (error || !space) return { ok: false, error: error?.message ?? "Something went wrong." };
+  if (error || !space) return { ok: false, error: t.errorToast };
 
   // Every space starts with its own Main Account + starter categories, same as a new signup.
-  await supabase.from("accounts").insert({
-    user_id: user.id,
-    space_id: space.id,
-    name: "Main Account",
-    type: "checking",
-  });
-
-  await supabase
-    .from("categories")
-    .insert(STARTER_CATEGORIES.map((c) => ({ user_id: user.id, space_id: space.id, name: c.name, kind: c.kind })));
+  const [{ error: accountError }, { error: categoriesError }] = await Promise.all([
+    supabase.from("accounts").insert({
+      user_id: user.id,
+      space_id: space.id,
+      name: "Main Account",
+      type: "checking",
+    }),
+    supabase
+      .from("categories")
+      .insert(STARTER_CATEGORIES.map((c) => ({ user_id: user.id, space_id: space.id, name: c.name, kind: c.kind }))),
+  ]);
+  if (accountError || categoriesError) return { ok: false, error: t.errorToast };
 
   const cookieStore = await cookies();
   cookieStore.set(SPACE_COOKIE, space.id, { path: "/", maxAge: 60 * 60 * 24 * 365 });
@@ -772,26 +922,29 @@ export async function addSpace(formData: FormData): Promise<AddSpaceResult> {
   return { ok: true, space: space as Space };
 }
 
-export async function updateSpace(formData: FormData) {
+export async function updateSpace(formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  const t = getDictionary(await getLocale()).common;
+  if (!user) return { ok: false, error: t.errorToast };
 
   const name = (formData.get("name") as string)?.trim();
-  if (!name) return;
+  if (!name) return { ok: false, error: t.errorToast };
   const color = (formData.get("color") as string) || "#10b981";
 
-  await supabase
+  const { error } = await supabase
     .from("spaces")
     .update({ name, color })
     .eq("id", formData.get("id"))
     .eq("user_id", user.id);
+  if (error) return { ok: false, error: t.errorToast };
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/history");
   revalidatePath("/dashboard/settings");
+  return { ok: true };
 }
 
 export type DeleteSpaceResult = { ok: true } | { ok: false; error: string };
@@ -801,9 +954,9 @@ export async function deleteSpace(formData: FormData): Promise<DeleteSpaceResult
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
-
   const t = getDictionary(await getLocale());
+  if (!user) return { ok: false, error: t.common.errorToast };
+
   const spaceId = formData.get("id") as string;
 
   const { count } = await supabase
@@ -816,7 +969,7 @@ export async function deleteSpace(formData: FormData): Promise<DeleteSpaceResult
   }
 
   const { error } = await supabase.from("spaces").delete().eq("id", spaceId).eq("user_id", user.id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: t.common.errorToast };
 
   // If the deleted space was the current one, fall back to whichever one is left.
   const cookieStore = await cookies();

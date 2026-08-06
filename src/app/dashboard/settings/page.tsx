@@ -13,7 +13,7 @@ import {
   categoryDisplayName,
   computeAccountBalances,
   getDashboardContext,
-  getPaidRecurringBillIds,
+  getPaidRecurringBillOccurrences,
   getReceivedIncomeSourceIds,
   getTransactionsForAccounts,
 } from "@/lib/dashboard-data";
@@ -36,9 +36,9 @@ export default async function SettingsPage() {
 
   const { accounts, categories, currency, widgetPrefs, recurringBills, incomeSources, allocationRules } =
     await getDashboardContext(supabase, user.id, getProfile(user.id), currentSpace);
-  const [transactions, paidBillIds, receivedSourceIds] = await Promise.all([
+  const [transactions, paidBillOccurrences, receivedSourceIds] = await Promise.all([
     getTransactionsForAccounts(supabase, accounts.map((a) => a.id)),
-    getPaidRecurringBillIds(supabase),
+    getPaidRecurringBillOccurrences(supabase),
     getReceivedIncomeSourceIds(supabase),
   ]);
   const balances = computeAccountBalances(accounts, transactions);
@@ -86,7 +86,7 @@ export default async function SettingsPage() {
             <h2 className="text-sm font-medium text-foreground/50">{t.recurringBills.heading}</h2>
             <RecurringBillsManager
               bills={recurringBills}
-              paidBillIds={paidBillIds}
+              paidBillOccurrences={paidBillOccurrences}
               categories={categories}
               accounts={accounts}
               currency={currency}

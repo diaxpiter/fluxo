@@ -67,10 +67,14 @@ export function AddTransactionFab({
               ref={formRef}
               action={(formData) => {
                 startTransition(async () => {
-                  await addTransaction(formData);
-                  notify(common.savedToast);
-                  formRef.current?.reset();
-                  setOpen(false);
+                  const result = await addTransaction(formData);
+                  if (result.ok) {
+                    notify(common.savedToast);
+                    formRef.current?.reset();
+                    setOpen(false);
+                  } else {
+                    notify(result.error, "error");
+                  }
                 });
               }}
               className="flex flex-col gap-4"

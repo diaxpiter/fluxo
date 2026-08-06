@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type Dispatch, type SetStateAction } from "react";
+import { useState, useTransition, type Dispatch, type SetStateAction } from "react";
 import { completeOnboarding } from "@/app/onboarding/actions";
 import { WelcomeStep } from "@/app/onboarding/steps/welcome";
 import { DayToDayAccountsStep } from "@/app/onboarding/steps/day-to-day-accounts";
@@ -35,6 +35,7 @@ export function OnboardingWizard({
   t: Dictionary;
 }) {
   const [step, setStep] = useState(0);
+  const [isPending, startTransition] = useTransition();
   const [answers, setAnswers] = useState<OnboardingAnswers>({
     ...EMPTY_ONBOARDING_ANSWERS,
     dayToDayAccounts: [{ name: t.common.mainAccount, startingBalance: 0 }],
@@ -70,10 +71,16 @@ export function OnboardingWizard({
             {t.onboarding.next}
           </button>
         ) : (
-          <form action={completeOnboarding}>
+          <form
+            action={(formData) => {
+              startTransition(async () => {
+                await completeOnboarding(formData);
+              });
+            }}
+          >
             <input type="hidden" name="mainAccountId" value={mainAccountId} />
             <input type="hidden" name="answers" value={JSON.stringify(answers)} />
-            <button type="submit" className={btnPrimaryClass}>
+            <button type="submit" disabled={isPending} className={btnPrimaryClass}>
               {t.onboarding.reviewStep.confirmButton}
             </button>
           </form>

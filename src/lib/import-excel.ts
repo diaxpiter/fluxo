@@ -19,6 +19,8 @@ export type ParsedImport = {
   startingBalanceKnown: boolean;
   transactions: ParsedTransaction[];
   monthChecks: MonthCheck[];
+  /** Rows dropped for having a blank description or a non-numeric amount. */
+  skippedCount: number;
 };
 
 function toYmd(value: unknown): string {
@@ -59,18 +61,22 @@ export function parseWorkbook(buffer: ArrayBuffer, locale = "en-US"): ParsedImpo
 
   const transactions: ParsedTransaction[] = [];
   const statedBalances: number[] = [];
+  let skippedCount = 0;
 
   for (const row of dataRows) {
     const description = String(row[1] ?? "").trim();
     const amount = Number(row[2]);
-    if (!description || !Number.isFinite(amount)) continue;
+    if (!description || !Number.isFinite(amount)) {
+      skippedCount++;
+      continue;
+    }
 
     transactions.push({ date: toYmd(row[0]), description, amount });
     statedBalances.push(Number(row[3]));
   }
 
   if (transactions.length === 0) {
-    return { startingBalance: 0, startingBalanceKnown: false, transactions: [], monthChecks: [] };
+    return { startingBalance: 0, startingBalanceKnown: false, transactions: [], monthChecks: [], skippedCount };
   }
 
   const startingBalanceKnown = Number.isFinite(statedBalances[0]);
@@ -99,6 +105,10 @@ export function parseWorkbook(buffer: ArrayBuffer, locale = "en-US"): ParsedImpo
     if (key !== monthKey) {
       flushMonth();
       monthKey = key;
+      // Don't carry a stated balance from a previous month into this one -- a month
+      // with no balance column at all should skip its check, not be compared against
+      // a leftover figure that has nothing to do with it.
+      monthExpected = NaN;
     }
     runningBalance += t.amount;
     monthEndBalance = runningBalance;
@@ -106,5 +116,5 @@ export function parseWorkbook(buffer: ArrayBuffer, locale = "en-US"): ParsedImpo
   });
   flushMonth();
 
-  return { startingBalance, startingBalanceKnown, transactions, monthChecks };
+  return { startingBalance, startingBalanceKnown, transactions, monthChecks, skippedCount };
 }

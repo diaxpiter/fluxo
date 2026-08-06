@@ -18,6 +18,9 @@ type Row = {
   category_id: string | null;
   amount: number;
   balance: number;
+  transfer_group_id?: string | null;
+  recurring_bill_id?: string | null;
+  income_source_id?: string | null;
 };
 
 export function TransactionList({
@@ -88,9 +91,11 @@ export function TransactionList({
                 </div>
               </div>
               <div className="mt-2 flex items-center gap-4">
-                <button type="button" onClick={() => setEditingId(row.id)} className={`${actionLinkClass} text-xs`}>
-                  {common.edit}
-                </button>
+                {!row.transfer_group_id && !row.recurring_bill_id && !row.income_source_id && (
+                  <button type="button" onClick={() => setEditingId(row.id)} className={`${actionLinkClass} text-xs`}>
+                    {common.edit}
+                  </button>
+                )}
                 <DeleteButton
                   id={row.id}
                   description={row.description}
@@ -156,9 +161,11 @@ export function TransactionList({
                   </td>
                   <td className="px-4 py-2.5 text-right">
                     <div className="flex items-center justify-end gap-3">
-                      <button type="button" onClick={() => setEditingId(row.id)} className={`${linkClass} text-xs`}>
-                        {common.edit}
-                      </button>
+                      {!row.transfer_group_id && !row.recurring_bill_id && !row.income_source_id && (
+                        <button type="button" onClick={() => setEditingId(row.id)} className={`${linkClass} text-xs`}>
+                          {common.edit}
+                        </button>
+                      )}
                       <DeleteButton
                         id={row.id}
                         description={row.description}
@@ -228,8 +235,8 @@ function DeleteButton({
               </button>
               <form
                 action={async (formData) => {
-                  await deleteTransaction(formData);
-                  notify(common.deletedToast);
+                  const result = await deleteTransaction(formData);
+                  notify(result.ok ? common.deletedToast : result.error, result.ok ? "success" : "error");
                 }}
               >
                 <input type="hidden" name="id" value={id} />
@@ -265,9 +272,13 @@ function EditForm({
   return (
     <form
       action={async (formData) => {
-        await updateTransaction(formData);
-        notify(common.savedToast);
-        onDone();
+        const result = await updateTransaction(formData);
+        if (result.ok) {
+          notify(common.savedToast);
+          onDone();
+        } else {
+          notify(result.error, "error");
+        }
       }}
       className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end"
     >

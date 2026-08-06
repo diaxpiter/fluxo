@@ -218,8 +218,8 @@ function DeleteButton({
               </button>
               <form
                 action={async (formData) => {
-                  await deleteTransaction(formData);
-                  notify(common.deletedToast);
+                  const result = await deleteTransaction(formData);
+                  notify(result.ok ? common.deletedToast : result.error, result.ok ? "success" : "error");
                 }}
               >
                 <input type="hidden" name="id" value={id} />
@@ -255,9 +255,13 @@ function EditForm({
   return (
     <form
       action={async (formData) => {
-        await updateTransaction(formData);
-        notify(common.savedToast);
-        onDone();
+        const result = await updateTransaction(formData);
+        if (result.ok) {
+          notify(common.savedToast);
+          onDone();
+        } else {
+          notify(result.error, "error");
+        }
       }}
       className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end"
     >

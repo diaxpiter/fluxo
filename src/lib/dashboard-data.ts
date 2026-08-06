@@ -102,20 +102,20 @@ export function categoryDisplayName(category: Category, categoryLabels: Dictiona
   return key ? categoryLabels[key] : category.name;
 }
 
-/** Ids of recurring bills already paid (linked to a real transaction) this month. */
-export async function getPaidRecurringBillIds(
+/** Recurring bills already paid this month (linked to a real transaction), with the date each was paid on. */
+export async function getPaidRecurringBillOccurrences(
   supabase: SupabaseClient,
   now = new Date(),
-): Promise<string[]> {
+): Promise<{ recurring_bill_id: string; date: string }[]> {
   const { start, end } = monthBoundsYmd(now);
   const { data } = await supabase
     .from("transactions")
-    .select("recurring_bill_id")
+    .select("recurring_bill_id, date")
     .not("recurring_bill_id", "is", null)
     .gte("date", start)
     .lte("date", end);
 
-  return (data ?? []).map((row) => row.recurring_bill_id as string);
+  return (data ?? []) as { recurring_bill_id: string; date: string }[];
 }
 
 /** Ids of income sources already received (linked to a real transaction) this month. */

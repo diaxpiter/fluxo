@@ -66,7 +66,7 @@ export default async function HistoryPage({
           />
         ) : (
           <div className="flex flex-col gap-3">
-            <div className="grid grid-cols-[1fr_6rem_6rem_6rem] gap-3 px-4 text-xs font-medium text-foreground/50">
+            <div className="hidden grid-cols-[1fr_6rem_6rem_6rem] gap-3 px-4 text-xs font-medium text-foreground/50 sm:grid">
               <span>{t.history.monthColumn}</span>
               <span className="text-right">{t.transactionList.moneyIn}</span>
               <span className="text-right">{t.transactionList.moneyOut}</span>

@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import type { StepProps } from "@/app/onboarding/onboarding-wizard";
 import { orderedSetAsides } from "@/lib/onboarding";
 import { computeAllocation } from "@/lib/allocation";
@@ -10,14 +9,18 @@ import { cardClass } from "@/lib/ui";
 import type { AllocationRule } from "@/lib/types";
 
 export function ReviewStep({ answers, setAnswers, t, currency, locale }: StepProps) {
-  const [overviewMode, setOverviewMode] = useState<"single" | "freeToSpend">("freeToSpend");
-
   const ordered = orderedSetAsides(answers.setAsides);
   const mainAccountName = answers.dayToDayAccounts[0]?.name || t.common.mainAccount;
-  const incomeAmount = answers.income?.expectedAmount ?? 0;
+  // The server always stores the absolute value (see completeOnboarding) -- preview the same
+  // magnitude here so a mistyped negative number doesn't show one figure and create another.
+  const incomeAmount = Math.abs(answers.income?.expectedAmount ?? 0);
+
+  // Derived from the actual data rather than separate state, so revisiting this step after
+  // Back/Next always reflects what's really set instead of resetting to a hardcoded default.
+  const overviewMode: "single" | "freeToSpend" =
+    ordered.length > 0 && ordered.every((row) => row.includeInOverview) ? "single" : "freeToSpend";
 
   function applyOverviewMode(mode: "single" | "freeToSpend") {
-    setOverviewMode(mode);
     setAnswers((prev) => ({
       ...prev,
       setAsides: prev.setAsides.map((s) => ({ ...s, includeInOverview: mode === "single" })),
@@ -39,7 +42,7 @@ export function ReviewStep({ answers, setAnswers, t, currency, locale }: StepPro
     target_account_id: String(i),
     priority_order: i,
     method: row.method,
-    value: row.value,
+    value: row.method === "percentage" ? Math.min(Math.abs(row.value), 100) : Math.abs(row.value),
     is_active: true,
     created_at: "",
   }));
@@ -127,7 +130,7 @@ export function ReviewStep({ answers, setAnswers, t, currency, locale }: StepPro
             {answers.bills.map((bill, i) => (
               <div key={i} className="flex items-center justify-between gap-3 border-b border-foreground/5 p-3 last:border-0">
                 <p className="text-sm">{bill.name}</p>
-                <p className="text-sm text-foreground/50">{formatCurrency(bill.amount, currency, locale)}</p>
+                <p className="text-sm text-foreground/50">{formatCurrency(Math.abs(bill.amount), currency, locale)}</p>
               </div>
             ))}
           </div>
@@ -149,7 +152,7 @@ export function ReviewStep({ answers, setAnswers, t, currency, locale }: StepPro
                         amount: formatCurrency(line?.amount ?? 0, currency, locale),
                         account: row.name,
                       })
-                    : `${row.name} — ${row.method === "fixed_amount" ? t.allocationRules.methodFixedAmount : t.allocationRules.methodPercentage} ${row.value}`}
+                    : `${row.name} — ${row.method === "fixed_amount" ? t.allocationRules.methodFixedAmount : t.allocationRules.methodPercentage} ${Math.abs(row.value)}`}
                 </p>
               );
             })}

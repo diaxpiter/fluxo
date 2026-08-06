@@ -21,7 +21,7 @@ import {
   numericClass,
 } from "@/lib/ui";
 import { notify } from "@/lib/toast";
-import { billOccurrencesInMonth } from "@/lib/widgets";
+import { billOccurrencesInMonth, remainingBillOccurrences } from "@/lib/widgets";
 import type { Dictionary } from "@/lib/i18n/dictionary";
 import { accountDisplayName, categoryDisplayName } from "@/lib/dashboard-data";
 import type { Account, BillRecurrenceType, Category, RecurringBill } from "@/lib/types";
@@ -39,7 +39,7 @@ function monthNames(locale: string) {
 
 export function RecurringBillsManager({
   bills,
-  paidBillIds,
+  paidBillOccurrences,
   categories,
   accounts,
   currency,
@@ -47,7 +47,7 @@ export function RecurringBillsManager({
   t,
 }: {
   bills: RecurringBill[];
-  paidBillIds: string[];
+  paidBillOccurrences: { recurring_bill_id: string; date: string }[];
   categories: Category[];
   accounts: Account[];
   currency: string;
@@ -69,7 +69,8 @@ export function RecurringBillsManager({
         <div className={cardClass}>
           {bills.map((bill) => {
             const totalThisMonth = billOccurrencesInMonth(bill).length;
-            const paidCount = paidBillIds.filter((id) => id === bill.id).length;
+            const paidForBill = paidBillOccurrences.filter((o) => o.recurring_bill_id === bill.id);
+            const paidCount = totalThisMonth - remainingBillOccurrences(bill, paidForBill).length;
             return (
               <BillRow
                 key={bill.id}
@@ -173,8 +174,8 @@ function BillRow({
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
         <form
           action={async (formData) => {
-            await updateRecurringBill(formData);
-            notify(t.common.savedToast);
+            const result = await updateRecurringBill(formData);
+            notify(result.ok ? t.common.savedToast : result.error, result.ok ? "success" : "error");
           }}
           onChange={(e) => e.currentTarget.requestSubmit()}
         >
@@ -256,9 +257,13 @@ function PayButton({ bill, t }: { bill: RecurringBill; t: Dictionary }) {
               ref={formRef}
               action={(formData) => {
                 startTransition(async () => {
-                  await payRecurringBill(formData);
-                  notify(t.common.savedToast);
-                  setOpen(false);
+                  const result = await payRecurringBill(formData);
+                  if (result.ok) {
+                    notify(t.common.savedToast);
+                    setOpen(false);
+                  } else {
+                    notify(result.error, "error");
+                  }
                 });
               }}
               className="flex flex-col gap-4"
@@ -329,8 +334,8 @@ function DeleteBillButton({ bill, t }: { bill: RecurringBill; t: Dictionary }) {
               </button>
               <form
                 action={async (formData) => {
-                  await deleteRecurringBill(formData);
-                  notify(t.common.deletedToast);
+                  const result = await deleteRecurringBill(formData);
+                  notify(result.ok ? t.common.deletedToast : result.error, result.ok ? "success" : "error");
                 }}
               >
                 <input type="hidden" name="id" value={bill.id} />
@@ -369,9 +374,13 @@ function BillForm({
   return (
     <form
       action={async (formData) => {
-        await action(formData);
-        notify(t.common.savedToast);
-        onDone();
+        const result = await action(formData);
+        if (result.ok) {
+          notify(t.common.savedToast);
+          onDone();
+        } else {
+          notify(result.error, "error");
+        }
       }}
       className={`${cardClass} flex flex-col gap-4 p-4`}
     >

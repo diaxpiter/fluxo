@@ -26,6 +26,13 @@ export async function completeOnboarding(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) return;
 
+  // Idempotency guard: a double-click, a slow network retry, or navigating back to /onboarding
+  // after already finishing it must never re-run these inserts a second time.
+  const { data: profile } = await supabase.from("profiles").select("onboarding_completed").eq("id", user.id).single();
+  if (profile?.onboarding_completed) {
+    redirect("/dashboard");
+  }
+
   const mainAccountId = formData.get("mainAccountId") as string;
 
   let answers: OnboardingAnswers;
@@ -129,7 +136,7 @@ export async function completeOnboarding(formData: FormData) {
           target_account_id: setAsideAccounts[i].id,
           priority_order: i,
           method: row.method,
-          value: Math.abs(Number(row.value)) || 0,
+          value: row.method === "percentage" ? Math.min(Math.abs(Number(row.value)) || 0, 100) : Math.abs(Number(row.value)) || 0,
           is_active: true,
         })),
       );

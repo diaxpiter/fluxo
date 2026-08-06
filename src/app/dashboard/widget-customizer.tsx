@@ -38,8 +38,8 @@ export function WidgetCustomizer({
       <p className="mb-3 text-xs text-foreground/50">{t.helpText}</p>
       <form
         action={async (formData) => {
-          await updateWidgetPrefs(formData);
-          notify(common.savedToast);
+          const result = await updateWidgetPrefs(formData);
+          notify(result.ok ? common.savedToast : result.error, result.ok ? "success" : "error");
         }}
         className="flex flex-col gap-1"
       >

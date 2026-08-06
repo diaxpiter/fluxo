@@ -112,8 +112,8 @@ function AccountRow({
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
         <form
           action={async (formData) => {
-            await updateAccount(formData);
-            notify(t.common.savedToast);
+            const result = await updateAccount(formData);
+            notify(result.ok ? t.common.savedToast : result.error, result.ok ? "success" : "error");
           }}
           onChange={(e) => e.currentTarget.requestSubmit()}
         >
@@ -174,8 +174,8 @@ function ArchiveButton({ account, t }: { account: Account; t: Dictionary }) {
               </button>
               <form
                 action={async (formData) => {
-                  await archiveAccount(formData);
-                  notify(t.common.deletedToast);
+                  const result = await archiveAccount(formData);
+                  notify(result.ok ? t.common.deletedToast : result.error, result.ok ? "success" : "error");
                 }}
               >
                 <input type="hidden" name="id" value={account.id} />
@@ -197,9 +197,13 @@ function AccountForm({ account, t, onDone }: { account?: Account; t: Dictionary;
   return (
     <form
       action={async (formData) => {
-        await action(formData);
-        notify(t.common.savedToast);
-        onDone();
+        const result = await action(formData);
+        if (result.ok) {
+          notify(t.common.savedToast);
+          onDone();
+        } else {
+          notify(result.error, "error");
+        }
       }}
       className={`${cardClass} flex flex-col gap-3 p-4`}
     >

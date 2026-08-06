@@ -154,6 +154,42 @@ export function billOccurrencesInMonth(bill: RecurringBill, now = new Date()): s
   return occurrences;
 }
 
+/**
+ * Which of this bill's occurrences this month are still unpaid. Matches each already-paid
+ * transaction to its *nearest* occurrence date rather than assuming payments happen in
+ * chronological order -- paying a later occurrence before an earlier one used to miscount
+ * which occurrence was still due (the earlier one would silently drop off the list while the
+ * paid one kept showing as owed).
+ */
+export function remainingBillOccurrences(
+  bill: RecurringBill,
+  transactionsThisMonth: Pick<Transaction, "recurring_bill_id" | "date">[],
+  now = new Date(),
+) {
+  const occurrences = billOccurrencesInMonth(bill, now);
+  const paidDates = transactionsThisMonth
+    .filter((t) => t.recurring_bill_id === bill.id)
+    .map((t) => t.date)
+    .sort();
+
+  const unclaimed = [...occurrences];
+  for (const paidDate of paidDates) {
+    if (unclaimed.length === 0) break;
+    const paidTime = parseYmd(paidDate).getTime();
+    let bestIndex = 0;
+    let bestDiff = Infinity;
+    for (let i = 0; i < unclaimed.length; i++) {
+      const diff = Math.abs(parseYmd(unclaimed[i]).getTime() - paidTime);
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        bestIndex = i;
+      }
+    }
+    unclaimed.splice(bestIndex, 1);
+  }
+  return unclaimed;
+}
+
 function isWeekend(d: Date) {
   const day = d.getDay();
   return day === 0 || day === 6;
@@ -228,21 +264,12 @@ export function computeWidgetValues(
     }
   }
 
-  // Paid *count* this month, not just a boolean -- a weekly/bi-weekly bill can have several
-  // occurrences due in one month, and paying one shouldn't hide the rest.
-  const paidCountsByBillId = new Map<string, number>();
-  for (const t of transactions) {
-    if (t.recurring_bill_id && t.date >= monthStart && t.date <= monthEnd) {
-      paidCountsByBillId.set(t.recurring_bill_id, (paidCountsByBillId.get(t.recurring_bill_id) ?? 0) + 1);
-    }
-  }
+  const transactionsThisMonth = transactions.filter((t) => t.date >= monthStart && t.date <= monthEnd);
 
   for (const bill of recurringBills) {
     if (!bill.is_active) continue;
     const amount = bill.is_variable ? bill.estimated_amount ?? 0 : bill.amount ?? 0;
-    const occurrences = billOccurrencesInMonth(bill, now);
-    const paidCount = paidCountsByBillId.get(bill.id) ?? 0;
-    const remaining = occurrences.slice(paidCount);
+    const remaining = remainingBillOccurrences(bill, transactionsThisMonth, now);
 
     for (const dueDate of remaining) {
       billsToPay += amount;

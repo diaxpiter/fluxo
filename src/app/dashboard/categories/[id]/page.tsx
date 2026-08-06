@@ -66,7 +66,7 @@ export default async function CategoryDetailPage({
   const monthKeys = rangeMonthKeys(range, transactions);
   const buckets = monthlyTotals(transactions, monthKeys);
   const transactionsInRange = transactions.filter((tr) => monthKeys.includes(tr.date.slice(0, 7)));
-  const stats = computeCategoryStats(buckets, transactionsInRange);
+  const stats = computeCategoryStats(buckets, transactionsInRange, range);
   const breakdown = topDescriptions(transactionsInRange);
 
   const rangeOptions: { key: CategoryRange; label: string }[] = [

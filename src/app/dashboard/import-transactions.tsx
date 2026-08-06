@@ -100,13 +100,21 @@ export function ImportTransactions({
         {result && result.ok && (
           <div className="flex flex-col gap-4">
             <p className="text-sm">
-              {result.startingBalanceKnown
+              {result.startingBalanceKnown && result.startingBalanceApplied
                 ? format(t.summary, {
                     count: result.insertedCount,
                     balance: formatCurrency(result.startingBalance, currency, locale),
                   })
-                : format(t.summaryNoBalance, { count: result.insertedCount })}
+                : result.startingBalanceKnown
+                  ? format(t.summaryBalanceSkippedNotFirst, { count: result.insertedCount })
+                  : format(t.summaryNoBalance, { count: result.insertedCount })}
             </p>
+
+            {result.skippedCount > 0 && (
+              <p className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm text-amber-500">
+                {format(t.skippedRowsWarning, { count: result.skippedCount })}
+              </p>
+            )}
 
             {result.monthChecks.length > 0 && (
               <div className={`${cardClass} divide-y divide-foreground/5`}>
@@ -116,7 +124,9 @@ export function ImportTransactions({
                     <span className="flex items-center gap-2">
                       <span className={numericClass}>{formatCurrency(m.computedEndBalance, currency, locale)}</span>
                       <span className={m.matches ? "text-emerald-500" : "text-red-400"}>
-                        {m.matches ? "✓" : `✗ (expected ${formatCurrency(m.expectedEndBalance, currency, locale)})`}
+                        {m.matches
+                          ? "✓"
+                          : `✗ (${format(t.expectedLabel, { amount: formatCurrency(m.expectedEndBalance, currency, locale) })})`}
                       </span>
                     </span>
                   </div>

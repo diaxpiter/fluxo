@@ -91,7 +91,9 @@ export function topDescriptions(transactions: Transaction[], limit = 5): Descrip
   const groups = new Map<string, { display: string; total: number; count: number }>();
 
   for (const t of transactions) {
-    const trimmed = t.description.trim();
+    // Collapse repeated internal whitespace too (common in bank exports, e.g. "UBER  EATS")
+    // so it merges with "UBER EATS" instead of splitting one merchant's spend across two rows.
+    const trimmed = t.description.trim().replace(/\s+/g, " ");
     if (!trimmed) continue;
     const key = trimmed.toUpperCase();
     const amount = Math.abs(Number(t.amount));
@@ -115,20 +117,44 @@ export function topDescriptions(transactions: Transaction[], limit = 5): Descrip
   };
 }
 
-export function computeCategoryStats(buckets: MonthlyBucket[], transactionsInRange: Transaction[]): CategoryStats {
-  const completed = buckets.filter((b) => !b.isCurrent);
+export function computeCategoryStats(
+  buckets: MonthlyBucket[],
+  transactionsInRange: Transaction[],
+  range: CategoryRange,
+  now = new Date(),
+): CategoryStats {
   const current = buckets.find((b) => b.isCurrent);
   const totalInRange = buckets.reduce((sum, b) => sum + b.total, 0);
 
   const magnitudes = transactionsInRange.map((t) => Math.abs(Number(t.amount)));
   const transactionCount = transactionsInRange.length;
 
+  // Fixed ranges' buckets are dense (one per calendar month, zero-spend months included), so
+  // counting non-current buckets is the right divisor. "all" is deliberately sparse -- only
+  // months with a transaction, so an old account doesn't render years of empty chart bars --
+  // and that same sparsity would overstate the average if used as its divisor too, so the real
+  // elapsed-month count is computed separately here instead of from the (sparse) bucket list.
+  let completedMonths: number;
+  if (range === "all") {
+    const earliest = transactionsInRange.reduce<string | null>(
+      (min, t) => (min === null || t.date < min ? t.date : min),
+      null,
+    );
+    if (earliest === null) {
+      completedMonths = 0;
+    } else {
+      const [earliestYear, earliestMonth] = earliest.slice(0, 7).split("-").map(Number);
+      completedMonths = Math.max(0, (now.getFullYear() - earliestYear) * 12 + (now.getMonth() - (earliestMonth - 1)));
+    }
+  } else {
+    completedMonths = buckets.filter((b) => !b.isCurrent).length;
+  }
+
   return {
     totalInRange,
-    monthlyAverage:
-      completed.length > 0 ? completed.reduce((s, b) => s + b.total, 0) / completed.length : totalInRange,
-    monthlyAverageIsPartial: completed.length === 0,
-    completedMonths: completed.length,
+    monthlyAverage: completedMonths > 0 ? (totalInRange - (current?.total ?? 0)) / completedMonths : totalInRange,
+    monthlyAverageIsPartial: completedMonths === 0,
+    completedMonths,
     monthToDate: current?.total ?? 0,
     transactionCount,
     avgTransaction: transactionCount > 0 ? magnitudes.reduce((s, m) => s + m, 0) / transactionCount : 0,

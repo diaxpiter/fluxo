@@ -30,9 +30,13 @@ export function StartingBalanceEditor({
   return (
     <form
       action={async (formData) => {
-        await updateStartingBalance(formData);
-        notify(common.savedToast);
-        setEditing(false);
+        const result = await updateStartingBalance(formData);
+        if (result.ok) {
+          notify(common.savedToast);
+          setEditing(false);
+        } else {
+          notify(result.error, "error");
+        }
       }}
       className="flex items-center gap-2"
     >
