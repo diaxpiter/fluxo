@@ -312,6 +312,8 @@ export const en_US: Dictionary = {
       helpText: "Savings, investing, a shared account with a partner, or saving toward a yearly bill — each one becomes its own account that automatically gets its share when income lands.",
       sinkingFundHint: "For a yearly bill, enter the monthly amount — e.g. a €600/year bill is €50/month.",
       nameLabel: "Name",
+      amountRowLabel: "Each time income arrives, set aside",
+      percentOfIncomeOption: "% of income",
       addSetAsideButton: "+ Add money set aside",
       removeSetAsideLabel: "Remove",
     },

@@ -73,8 +73,8 @@ export function IncomeStep({ answers, setAnswers, t }: StepProps) {
                     type="number"
                     min="1"
                     max="31"
-                    value={income.dayOfMonth ?? 25}
-                    onChange={(e) => patch({ dayOfMonth: Number(e.target.value) })}
+                    value={income.dayOfMonth ?? ""}
+                    onChange={(e) => patch({ dayOfMonth: e.target.value === "" ? null : Number(e.target.value) })}
                     className={`${fieldClass} w-20`}
                   />
                 </div>

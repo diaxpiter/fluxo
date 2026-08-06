@@ -312,6 +312,8 @@ export const pt_BR: Dictionary = {
       helpText: "Economias, investimentos, uma conta compartilhada com o(a) parceiro(a), ou guardar para uma conta anual — cada uma se torna sua própria conta, que recebe automaticamente sua parte quando a renda chega.",
       sinkingFundHint: "Para uma conta anual, informe o valor mensal — por exemplo, uma conta de R$ 600/ano é R$ 50/mês.",
       nameLabel: "Nome",
+      amountRowLabel: "A cada vez que a renda chega, guardar",
+      percentOfIncomeOption: "% da renda",
       addSetAsideButton: "+ Adicionar dinheiro guardado",
       removeSetAsideLabel: "Remover",
     },

@@ -52,8 +52,11 @@ export function DayToDayAccountsStep({ answers, setAnswers, t }: StepProps) {
               <input
                 type="number"
                 step="0.01"
-                value={account.startingBalance}
-                onChange={(e) => updateAccount(i, { startingBalance: Number(e.target.value) })}
+                value={account.startingBalance === 0 ? "" : account.startingBalance}
+                onChange={(e) =>
+                  updateAccount(i, { startingBalance: e.target.value === "" ? 0 : Number(e.target.value) })
+                }
+                placeholder={t.addTransaction.amountPlaceholder}
                 className={`${fieldClass} w-28`}
               />
             </div>

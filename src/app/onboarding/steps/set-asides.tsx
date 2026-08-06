@@ -71,26 +71,25 @@ export function SetAsidesStep({ answers, setAnswers, t }: StepProps) {
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-foreground/50">{t.allocationRules.methodLabel}</label>
-                  <select
-                    value={row.method}
-                    onChange={(e) => updateSetAside(i, { method: e.target.value as SetAsideAnswer["method"] })}
-                    className={fieldClass}
-                  >
-                    <option value="fixed_amount">{t.allocationRules.methodFixedAmount}</option>
-                    <option value="percentage">{t.allocationRules.methodPercentage}</option>
-                  </select>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-foreground/50">{t.allocationRules.valueLabel}</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={row.value}
-                    onChange={(e) => updateSetAside(i, { value: Number(e.target.value) })}
-                    className={`${fieldClass} w-24`}
-                  />
+                  <label className="text-xs text-foreground/50">{t.onboarding.setAsidesStep.amountRowLabel}</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={row.value === 0 ? "" : row.value}
+                      onChange={(e) => updateSetAside(i, { value: e.target.value === "" ? 0 : Number(e.target.value) })}
+                      placeholder={t.addTransaction.amountPlaceholder}
+                      className={`${fieldClass} w-24`}
+                    />
+                    <select
+                      value={row.method}
+                      onChange={(e) => updateSetAside(i, { method: e.target.value as SetAsideAnswer["method"] })}
+                      className={fieldClass}
+                    >
+                      <option value="fixed_amount">{t.allocationRules.methodFixedAmount}</option>
+                      <option value="percentage">{t.onboarding.setAsidesStep.percentOfIncomeOption}</option>
+                    </select>
+                  </div>
                 </div>
 
                 <button

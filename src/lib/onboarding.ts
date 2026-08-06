@@ -1,4 +1,4 @@
-import type { AllocationMethod, AccountType, IncomeScheduleType, WeekendHolidayRule } from "@/lib/types";
+import type { AllocationMethod, AccountType, BillRecurrenceType, IncomeScheduleType, WeekendHolidayRule } from "@/lib/types";
 
 /** Account types offered as onboarding set-asides — the day-to-day types (checking/cash) are handled separately. */
 export type SetAsideType = Extract<AccountType, "sinking_fund" | "savings" | "emergency" | "investment" | "shared">;
@@ -35,9 +35,15 @@ export type IncomeAnswer = {
 
 export type BillAnswer = {
   name: string;
+  isVariable: boolean;
   amount: number;
-  dueDayOfMonth: number;
+  estimatedAmount: number | null;
   categoryKey: PresetBillCategoryKey;
+  recurrenceType: BillRecurrenceType;
+  dueDayOfMonth: number;
+  dueDayOfWeek: number;
+  dueMonth: number;
+  anchorDate: string;
 };
 
 export type SetAsideAnswer = {

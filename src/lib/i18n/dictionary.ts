@@ -312,6 +312,10 @@ export type Dictionary = {
       helpText: string;
       sinkingFundHint: string;
       nameLabel: string;
+      /** Label above the combined amount+method row, e.g. "Each time income arrives, set aside" */
+      amountRowLabel: string;
+      /** The percentage option in that row's method select, phrased for a first-time user */
+      percentOfIncomeOption: string;
       addSetAsideButton: string;
       removeSetAsideLabel: string;
     };

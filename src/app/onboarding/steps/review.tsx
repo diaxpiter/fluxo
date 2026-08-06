@@ -130,7 +130,10 @@ export function ReviewStep({ answers, setAnswers, t, currency, locale }: StepPro
             {answers.bills.map((bill, i) => (
               <div key={i} className="flex items-center justify-between gap-3 border-b border-foreground/5 p-3 last:border-0">
                 <p className="text-sm">{bill.name}</p>
-                <p className="text-sm text-foreground/50">{formatCurrency(Math.abs(bill.amount), currency, locale)}</p>
+                <p className="text-sm text-foreground/50">
+                  {bill.isVariable ? "~" : ""}
+                  {formatCurrency(Math.abs(bill.isVariable ? bill.estimatedAmount ?? 0 : bill.amount), currency, locale)}
+                </p>
               </div>
             ))}
           </div>

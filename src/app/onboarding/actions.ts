@@ -102,10 +102,18 @@ export async function completeOnboarding(formData: FormData) {
         account_id: mainAccountId,
         category_id: categoryIdFor(bill.categoryKey),
         name: bill.name?.trim() || "Bill",
-        is_variable: false,
-        amount: Math.abs(Number(bill.amount)) || 0,
-        estimated_amount: null,
-        due_day_of_month: clampDayOfMonth(bill.dueDayOfMonth) ?? 1,
+        is_variable: bill.isVariable,
+        amount: bill.isVariable ? null : Math.abs(Number(bill.amount)) || 0,
+        estimated_amount: bill.isVariable ? Math.abs(Number(bill.estimatedAmount)) || 0 : null,
+        recurrence_type: bill.recurrenceType,
+        due_day_of_month:
+          bill.recurrenceType === "monthly" || bill.recurrenceType === "yearly"
+            ? clampDayOfMonth(bill.dueDayOfMonth) ?? 1
+            : null,
+        due_day_of_week:
+          bill.recurrenceType === "weekly" || bill.recurrenceType === "biweekly" ? bill.dueDayOfWeek : null,
+        due_month: bill.recurrenceType === "yearly" ? bill.dueMonth : null,
+        anchor_date: bill.recurrenceType === "biweekly" ? bill.anchorDate : null,
         is_active: true,
       })),
     );

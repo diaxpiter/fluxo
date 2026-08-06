@@ -312,6 +312,8 @@ export const pt_PT: Dictionary = {
       helpText: "Poupança, investimento, uma conta partilhada com o(a) parceiro(a), ou poupar para uma conta anual — cada uma passa a ser a sua própria conta, que recebe automaticamente a sua parte quando o rendimento chega.",
       sinkingFundHint: "Para uma conta anual, indique o valor mensal — por exemplo, uma conta de 600 €/ano é 50 €/mês.",
       nameLabel: "Nome",
+      amountRowLabel: "De cada vez que o rendimento chega, pôr de lado",
+      percentOfIncomeOption: "% do rendimento",
       addSetAsideButton: "+ Adicionar dinheiro de lado",
       removeSetAsideLabel: "Remover",
     },
