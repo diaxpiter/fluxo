@@ -155,7 +155,7 @@ export async function updateWidgetPrefs(formData: FormData) {
 }
 
 export type ImportResult =
-  | { ok: true; insertedCount: number; startingBalance: number; monthChecks: MonthCheck[] }
+  | { ok: true; insertedCount: number; startingBalance: number; startingBalanceKnown: boolean; monthChecks: MonthCheck[] }
   | { ok: false; error: string };
 
 export async function importTransactions(formData: FormData): Promise<ImportResult> {
@@ -165,7 +165,8 @@ export async function importTransactions(formData: FormData): Promise<ImportResu
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Not signed in." };
 
-  const t = getDictionary(await getLocale()).importTransactions;
+  const locale = await getLocale();
+  const t = getDictionary(locale).importTransactions;
 
   const accountId = formData.get("accountId") as string;
   const file = formData.get("file") as File | null;
@@ -174,7 +175,7 @@ export async function importTransactions(formData: FormData): Promise<ImportResu
   let parsed;
   try {
     const buffer = await file.arrayBuffer();
-    parsed = parseWorkbook(buffer);
+    parsed = parseWorkbook(buffer, locale);
   } catch {
     return { ok: false, error: t.invalidFile };
   }
@@ -183,12 +184,14 @@ export async function importTransactions(formData: FormData): Promise<ImportResu
     return { ok: false, error: t.noTransactionsFound };
   }
 
-  const { error: balanceError } = await supabase
-    .from("accounts")
-    .update({ starting_balance: parsed.startingBalance })
-    .eq("id", accountId)
-    .eq("user_id", user.id);
-  if (balanceError) return { ok: false, error: balanceError.message };
+  if (parsed.startingBalanceKnown) {
+    const { error: balanceError } = await supabase
+      .from("accounts")
+      .update({ starting_balance: parsed.startingBalance })
+      .eq("id", accountId)
+      .eq("user_id", user.id);
+    if (balanceError) return { ok: false, error: balanceError.message };
+  }
 
   const { error: insertError } = await supabase.from("transactions").insert(
     parsed.transactions.map((t) => ({
@@ -209,6 +212,7 @@ export async function importTransactions(formData: FormData): Promise<ImportResu
     ok: true,
     insertedCount: parsed.transactions.length,
     startingBalance: parsed.startingBalance,
+    startingBalanceKnown: parsed.startingBalanceKnown,
     monthChecks: parsed.monthChecks,
   };
 }

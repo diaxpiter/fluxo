@@ -173,6 +173,25 @@ export async function getTransactionsForAccounts(
   return (data as Transaction[] | null) ?? [];
 }
 
+/** Every transaction tagged with this category, across the given accounts -- a category has no single running balance since it can span accounts. */
+export async function getCategoryTransactions(
+  supabase: SupabaseClient,
+  accountIds: string[],
+  categoryId: string,
+): Promise<Transaction[]> {
+  if (accountIds.length === 0) return [];
+
+  const { data } = await supabase
+    .from("transactions")
+    .select("*")
+    .in("account_id", accountIds)
+    .eq("category_id", categoryId)
+    .order("date", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  return (data as Transaction[] | null) ?? [];
+}
+
 /** Each account's starting balance plus the sum of its own past transactions. */
 export function computeAccountBalances(
   accounts: Account[],

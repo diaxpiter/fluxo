@@ -100,25 +100,29 @@ export function ImportTransactions({
         {result && result.ok && (
           <div className="flex flex-col gap-4">
             <p className="text-sm">
-              {format(t.summary, {
-                count: result.insertedCount,
-                balance: formatCurrency(result.startingBalance, currency, locale),
-              })}
+              {result.startingBalanceKnown
+                ? format(t.summary, {
+                    count: result.insertedCount,
+                    balance: formatCurrency(result.startingBalance, currency, locale),
+                  })
+                : format(t.summaryNoBalance, { count: result.insertedCount })}
             </p>
 
-            <div className={`${cardClass} divide-y divide-foreground/5`}>
-              {result.monthChecks.map((m) => (
-                <div key={m.sheet} className="flex items-center justify-between px-4 py-2.5 text-sm">
-                  <span className="text-foreground/70">{m.sheet}</span>
-                  <span className="flex items-center gap-2">
-                    <span className={numericClass}>{formatCurrency(m.computedEndBalance, currency, locale)}</span>
-                    <span className={m.matches ? "text-emerald-500" : "text-red-400"}>
-                      {m.matches ? "✓" : `✗ (expected ${formatCurrency(m.expectedEndBalance, currency, locale)})`}
+            {result.monthChecks.length > 0 && (
+              <div className={`${cardClass} divide-y divide-foreground/5`}>
+                {result.monthChecks.map((m) => (
+                  <div key={m.month} className="flex items-center justify-between px-4 py-2.5 text-sm">
+                    <span className="text-foreground/70">{m.month}</span>
+                    <span className="flex items-center gap-2">
+                      <span className={numericClass}>{formatCurrency(m.computedEndBalance, currency, locale)}</span>
+                      <span className={m.matches ? "text-emerald-500" : "text-red-400"}>
+                        {m.matches ? "✓" : `✗ (expected ${formatCurrency(m.expectedEndBalance, currency, locale)})`}
+                      </span>
                     </span>
-                  </span>
-                </div>
-              ))}
-            </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <button type="button" onClick={close} className={btnPrimaryClass}>
               {t.done}

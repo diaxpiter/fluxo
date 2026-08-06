@@ -51,6 +51,7 @@ export type Dictionary = {
   settings: {
     title: string;
     widgetsHeading: string;
+    categoriesHeading: string;
     languageHeading: string;
     sessionHeading: string;
     logOut: string;
@@ -203,6 +204,39 @@ export type Dictionary = {
     newCategory: string;
     namePlaceholder: string;
   };
+  categoryDetail: {
+    backLabel: string;
+    /** Kind labels for the literal English `kind` values the signup trigger seeds categories with. */
+    kindLabels: Record<"income" | "fixed_bill" | "savings" | "discretionary" | "other", string>;
+    range1m: string;
+    range3m: string;
+    range6m: string;
+    range12m: string;
+    rangeAll: string;
+    totalLabel: string;
+    /** Placeholder: {count} */
+    transactionsCount: string;
+    monthlyAverageLabel: string;
+    /** Placeholder: {count} */
+    monthlyAverageSub: string;
+    monthlyAverageNoDataSub: string;
+    monthToDateLabel: string;
+    pacingAboveLabel: string;
+    pacingBelowLabel: string;
+    avgTransactionLabel: string;
+    /** Placeholder: {amount} */
+    largestTransactionSub: string;
+    chartHeading: string;
+    averageLegend: string;
+    currentMonthSuffix: string;
+    whereItGoesHeading: string;
+    whereItGoesCaveat: string;
+    /** Placeholder: {count} */
+    timesCount: string;
+    otherLabel: string;
+    transactionsHeading: string;
+    empty: string;
+  };
   spaces: {
     switcherLabel: string;
     heading: string;
@@ -229,6 +263,8 @@ export type Dictionary = {
     noTransactionsFound: string;
     /** Placeholders: {count}, {balance} */
     summary: string;
+    /** Placeholder: {count} */
+    summaryNoBalance: string;
     done: string;
   };
   onboarding: {

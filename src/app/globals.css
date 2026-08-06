@@ -34,6 +34,17 @@ option {
   background: rgba(16, 185, 129, 0.25);
 }
 
+/* iOS Safari zooms the whole page on focus when a form control's font-size is
+   under 16px. Force 16px on touch devices only, so desktop keeps its smaller
+   text-xs/text-sm sizing. */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
 @keyframes fade-in-up {
   from {
     opacity: 0;

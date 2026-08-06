@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { createClient, getAuthenticatedUser, getProfile } from "@/lib/supabase/server";
 import { logout } from "@/app/auth/actions";
 import { WidgetCustomizer } from "@/app/dashboard/widget-customizer";
@@ -9,6 +10,7 @@ import { IncomeSourcesManager } from "@/app/dashboard/income-sources-manager";
 import { AllocationRulesManager } from "@/app/dashboard/allocation-rules-manager";
 import { SpaceSwitcher } from "@/app/dashboard/space-switcher";
 import {
+  categoryDisplayName,
   computeAccountBalances,
   getDashboardContext,
   getPaidRecurringBillIds,
@@ -60,6 +62,24 @@ export default async function SettingsPage() {
           <h2 className="text-sm font-medium text-foreground/50">{t.accounts.heading}</h2>
           <AccountManager accounts={accounts} balances={balances} currency={currency} locale={locale} t={t} />
         </div>
+
+        {categories.length > 0 && (
+          <div className="flex flex-col gap-3">
+            <h2 className="text-sm font-medium text-foreground/50">{t.settings.categoriesHeading}</h2>
+            <div className={cardClass}>
+              {categories.map((category) => (
+                <Link
+                  key={category.id}
+                  href={`/dashboard/categories/${category.id}`}
+                  className="flex items-center justify-between gap-3 border-b border-foreground/5 p-4 text-sm transition-colors duration-150 last:border-0 hover:bg-foreground/[0.04]"
+                >
+                  <span className="truncate">{categoryDisplayName(category, t.categories)}</span>
+                  <span className="text-foreground/30">›</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
 
         {accounts.length > 0 && (
           <div className="flex flex-col gap-3">

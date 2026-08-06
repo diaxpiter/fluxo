@@ -7,7 +7,7 @@ export type ParsedTransaction = {
 };
 
 export type MonthCheck = {
-  sheet: string;
+  month: string;
   expectedEndBalance: number;
   computedEndBalance: number;
   matches: boolean;
@@ -15,6 +15,8 @@ export type MonthCheck = {
 
 export type ParsedImport = {
   startingBalance: number;
+  /** False when the file has no balance column -- `startingBalance` is then just a 0 placeholder, not a real inferred value. */
+  startingBalanceKnown: boolean;
   transactions: ParsedTransaction[];
   monthChecks: MonthCheck[];
 };
@@ -43,52 +45,66 @@ function isBlankRow(row: unknown[]) {
 }
 
 /**
- * Each sheet is one month. Row 1 is a header, row 2 is a "Saldo Anterior"
- * carry-over checkpoint (not a real transaction — its balance becomes the
- * account's starting balance for the very first sheet). Every other
- * non-blank row, including the last one, is a real transaction.
+ * One flat sheet, oldest transaction first. Row 1 is a header (skipped); every other non-blank
+ * row is a transaction: date, description, amount, and -- optionally -- the account's balance
+ * right after it, the way most bank statement exports include it. That balance column isn't
+ * required to import, but when it's there it's used to infer the starting balance and to
+ * sanity-check the import month by month.
  */
-export function parseWorkbook(buffer: ArrayBuffer): ParsedImport {
+export function parseWorkbook(buffer: ArrayBuffer, locale = "en-US"): ParsedImport {
   const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true });
+  const dataRows = rows.slice(1).filter((row) => !isBlankRow(row));
 
   const transactions: ParsedTransaction[] = [];
+  const statedBalances: number[] = [];
+
+  for (const row of dataRows) {
+    const description = String(row[1] ?? "").trim();
+    const amount = Number(row[2]);
+    if (!description || !Number.isFinite(amount)) continue;
+
+    transactions.push({ date: toYmd(row[0]), description, amount });
+    statedBalances.push(Number(row[3]));
+  }
+
+  if (transactions.length === 0) {
+    return { startingBalance: 0, startingBalanceKnown: false, transactions: [], monthChecks: [] };
+  }
+
+  const startingBalanceKnown = Number.isFinite(statedBalances[0]);
+  const startingBalance = startingBalanceKnown ? round2(statedBalances[0] - transactions[0].amount) : 0;
+
+  const monthLabelFormat = new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" });
   const monthChecks: MonthCheck[] = [];
-  let startingBalance = 0;
-  let runningBalance = 0;
+  let runningBalance = startingBalance;
+  let monthKey = transactions[0].date.slice(0, 7);
+  let monthEndBalance = runningBalance;
+  let monthExpected = NaN;
 
-  workbook.SheetNames.forEach((sheetName, sheetIndex) => {
-    const sheet = workbook.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true });
-    const dataRows = rows.slice(1).filter((row) => !isBlankRow(row));
-    if (dataRows.length === 0) return;
+  const flushMonth = () => {
+    if (!Number.isFinite(monthExpected)) return;
+    const [year, month] = monthKey.split("-").map(Number);
+    monthChecks.push({
+      month: monthLabelFormat.format(new Date(year, month - 1, 1)),
+      expectedEndBalance: round2(monthExpected),
+      computedEndBalance: round2(monthEndBalance),
+      matches: Math.abs(monthExpected - monthEndBalance) < 0.02,
+    });
+  };
 
-    const [checkpoint, ...realRows] = dataRows;
-
-    if (sheetIndex === 0) {
-      const checkpointBalance = Number(checkpoint[3]);
-      startingBalance = Number.isFinite(checkpointBalance) ? checkpointBalance : 0;
-      runningBalance = startingBalance;
+  transactions.forEach((t, i) => {
+    const key = t.date.slice(0, 7);
+    if (key !== monthKey) {
+      flushMonth();
+      monthKey = key;
     }
-
-    for (const row of realRows) {
-      const description = String(row[1] ?? "").trim();
-      const amount = Number(row[2]);
-      if (!description || !Number.isFinite(amount)) continue;
-
-      transactions.push({ date: toYmd(row[0]), description, amount });
-      runningBalance += amount;
-    }
-
-    const expected = Number(realRows.at(-1)?.[3]);
-    if (Number.isFinite(expected)) {
-      monthChecks.push({
-        sheet: sheetName,
-        expectedEndBalance: round2(expected),
-        computedEndBalance: round2(runningBalance),
-        matches: Math.abs(expected - runningBalance) < 0.02,
-      });
-    }
+    runningBalance += t.amount;
+    monthEndBalance = runningBalance;
+    if (Number.isFinite(statedBalances[i])) monthExpected = statedBalances[i];
   });
+  flushMonth();
 
-  return { startingBalance, transactions, monthChecks };
+  return { startingBalance, startingBalanceKnown, transactions, monthChecks };
 }
