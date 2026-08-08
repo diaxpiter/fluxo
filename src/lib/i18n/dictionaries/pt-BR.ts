@@ -45,6 +45,7 @@ export const pt_BR: Dictionary = {
     widgetsHeading: "Widgets da visão geral",
     categoriesHeading: "Categorias",
     sharingHeading: "Compartilhamento",
+    dataExportHeading: "Exportar seus dados",
     languageHeading: "Idioma",
     securityHeading: "Autenticação em dois fatores",
     sessionHeading: "Sessão",
@@ -120,6 +121,10 @@ export const pt_BR: Dictionary = {
     deleteTitle: "Excluir transação?",
     deleteBody: '"{description}" ({amount}) será excluída permanentemente.',
     linkedEditError: "Esta transação está vinculada a uma transferência, conta ou fonte de renda. Exclua e adicione novamente em vez de editar.",
+    selectButton: "Selecionar",
+    selectedCount: "{count} selecionada(s)",
+    deleteSelectedTitle: "Excluir {count} transações?",
+    deleteSelectedBody: "Isso excluirá permanentemente as {count} transações selecionadas.",
   },
   addTransaction: {
     addButtonLabel: "Adicionar transação",
@@ -400,6 +405,12 @@ export const pt_BR: Dictionary = {
       submit: "Verificar",
       invalidCode: "Esse código não funcionou. Tente novamente.",
     },
+  },
+  dataExport: {
+    description:
+      "Uma cópia pessoal das transações e configurações deste espaço — útil como backup, ou caso queira levar seus dados para outro lugar.",
+    csvButton: "Baixar transações (CSV)",
+    jsonButton: "Baixar backup completo (JSON)",
   },
   mfaSettings: {
     description: "Adicione uma etapa extra no login usando um aplicativo autenticador (como Google Authenticator ou 1Password).",

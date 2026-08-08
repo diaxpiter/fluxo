@@ -140,6 +140,21 @@ export default async function SettingsPage() {
         </div>
 
         <div className="flex flex-col gap-3">
+          <h2 className="text-sm font-medium text-foreground/50">{t.settings.dataExportHeading}</h2>
+          <div className={`${cardClass} flex flex-col gap-3 p-4`}>
+            <p className="text-sm text-foreground/50">{t.dataExport.description}</p>
+            <div className="flex flex-wrap gap-2">
+              <a href="/dashboard/settings/export?format=csv" className={btnGhostClass}>
+                {t.dataExport.csvButton}
+              </a>
+              <a href="/dashboard/settings/export?format=json" className={btnGhostClass}>
+                {t.dataExport.jsonButton}
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3">
           <h2 className="text-sm font-medium text-foreground/50">{t.settings.languageHeading}</h2>
           <div className={`${cardClass} p-4`}>
             <LanguageSelector current={locale} />

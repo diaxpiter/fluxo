@@ -5,6 +5,7 @@ import { ImportTransactions } from "@/app/dashboard/import-transactions";
 import { TransactionList } from "@/app/dashboard/transaction-list";
 import { MonthGroup } from "@/app/dashboard/history/month-group";
 import { AccountSwitcher } from "@/app/dashboard/history/account-switcher";
+import { SelectionActionBar, SelectionProvider, SelectionToggle } from "@/app/dashboard/history/selection";
 import { SpaceSwitcher } from "@/app/dashboard/space-switcher";
 import { cardClass } from "@/lib/ui";
 import { getDashboardContext, getLedgerRows, groupByMonth } from "@/lib/dashboard-data";
@@ -38,6 +39,7 @@ export default async function HistoryPage({
   const months = groupByMonth(rows, locale);
 
   return (
+    <SelectionProvider>
     <main className="flex flex-1 flex-col px-4 pb-24 pt-[calc(env(safe-area-inset-top)+2rem)] sm:pt-12 sm:pb-24">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -46,9 +48,12 @@ export default async function HistoryPage({
             <h1 className="text-xl font-semibold tracking-tight">{t.history.title}</h1>
             {account && <AccountSwitcher accounts={accounts} selectedId={account.id} t={t.common} />}
           </div>
-          {account && (
-            <ImportTransactions accountId={account.id} currency={currency} locale={locale} t={t.importTransactions} />
-          )}
+          <div className="flex items-center gap-3">
+            {months.length > 0 && <SelectionToggle t={t.transactionList} common={t.common} />}
+            {account && (
+              <ImportTransactions accountId={account.id} currency={currency} locale={locale} t={t.importTransactions} />
+            )}
+          </div>
         </div>
 
         {!account ? (
@@ -105,6 +110,8 @@ export default async function HistoryPage({
           categoryLabels={t.categories}
         />
       )}
+      <SelectionActionBar t={t.transactionList} common={t.common} />
     </main>
+    </SelectionProvider>
   );
 }

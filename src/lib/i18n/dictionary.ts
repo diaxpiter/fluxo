@@ -54,6 +54,7 @@ export type Dictionary = {
     widgetsHeading: string;
     categoriesHeading: string;
     sharingHeading: string;
+    dataExportHeading: string;
     languageHeading: string;
     securityHeading: string;
     sessionHeading: string;
@@ -115,6 +116,13 @@ export type Dictionary = {
     deleteBody: string;
     /** Shown when trying to edit one leg of a transfer, or a bill/income-linked row -- delete and redo instead. */
     linkedEditError: string;
+    selectButton: string;
+    /** Placeholder: {count} */
+    selectedCount: string;
+    /** Placeholder: {count} */
+    deleteSelectedTitle: string;
+    /** Placeholder: {count} */
+    deleteSelectedBody: string;
   };
   addTransaction: {
     addButtonLabel: string;
@@ -407,6 +415,11 @@ export type Dictionary = {
       submit: string;
       invalidCode: string;
     };
+  };
+  dataExport: {
+    description: string;
+    csvButton: string;
+    jsonButton: string;
   };
   mfaSettings: {
     description: string;

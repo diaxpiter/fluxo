@@ -252,8 +252,12 @@ export function computeWidgetValues(
         spentThisMonth += spent;
         if (spent > biggestExpenseThisMonth) biggestExpenseThisMonth = spent;
       }
-      if (!isPast && date <= monthEnd) billsToPay += spent;
-      if (!isPast && date >= today && date <= next7End) billsNext7Days += spent;
+      // Only transactions already linked to a recurring bill (e.g. paid ahead via "Pay bill")
+      // count here -- otherwise any future-dated ad-hoc expense would inflate "bills to pay"
+      // with spending that isn't a bill, and a bill paid via the generic add-transaction form
+      // (no recurring_bill_id) would get double-counted against its still-"unclaimed" occurrence.
+      if (!isPast && date <= monthEnd && t.recurring_bill_id) billsToPay += spent;
+      if (!isPast && date >= today && date <= next7End && t.recurring_bill_id) billsNext7Days += spent;
       if (isPast && date >= weekStart) paidThisWeek += spent;
     } else if (amount > 0) {
       if (date >= today && date <= weekEnd) incomingThisWeek += amount;
@@ -314,4 +318,99 @@ export function computeWidgetValues(
     biggest_expense_this_month: biggestExpenseThisMonth,
     biggest_income_this_month: biggestIncomeThisMonth,
   } satisfies Record<WidgetKey | "currentBalance", number>;
+}
+
+/** One account's actual daily balance over the trailing `days` days (today included), for a sparkline. */
+export function computeAccountBalanceTrend(
+  transactions: Transaction[],
+  startingBalance: number,
+  days = 30,
+  now = new Date(),
+): number[] {
+  const today = todayYmd(now);
+  const windowStart = ymd(addDays(now, -(days - 1)));
+
+  let baseline = startingBalance;
+  const deltaByDate = new Map<string, number>();
+  for (const t of transactions) {
+    if (t.date > today) continue;
+    if (t.date < windowStart) {
+      baseline += Number(t.amount);
+    } else {
+      deltaByDate.set(t.date, (deltaByDate.get(t.date) ?? 0) + Number(t.amount));
+    }
+  }
+
+  const points: number[] = [];
+  let running = baseline;
+  let d = parseYmd(windowStart);
+  for (let i = 0; i < days; i++) {
+    running += deltaByDate.get(ymd(d)) ?? 0;
+    points.push(running);
+    d = addDays(d, 1);
+  }
+  return points;
+}
+
+/**
+ * Day-by-day trajectory across the current month, blending real transactions with the same
+ * remaining-bill / expected-income projection `computeWidgetValues` uses -- the last point
+ * always equals that function's `end_of_month_projection`.
+ */
+export function computeProjectionTrend(
+  transactions: Transaction[],
+  startingBalance: number,
+  recurringBills: RecurringBill[] = [],
+  incomeSources: IncomeSource[] = [],
+  now = new Date(),
+): number[] {
+  const { start: monthStart, end: monthEnd } = monthBoundsYmd(now);
+
+  let baseline = startingBalance;
+  const deltaByDate = new Map<string, number>();
+  for (const t of transactions) {
+    const amount = Number(t.amount);
+    if (t.date < monthStart) baseline += amount;
+    else if (t.date <= monthEnd) deltaByDate.set(t.date, (deltaByDate.get(t.date) ?? 0) + amount);
+  }
+
+  const transactionsThisMonth = transactions.filter((t) => t.date >= monthStart && t.date <= monthEnd);
+
+  for (const bill of recurringBills) {
+    if (!bill.is_active) continue;
+    const amount = bill.is_variable ? bill.estimated_amount ?? 0 : bill.amount ?? 0;
+    for (const dueDate of remainingBillOccurrences(bill, transactionsThisMonth, now)) {
+      if (dueDate <= monthEnd) deltaByDate.set(dueDate, (deltaByDate.get(dueDate) ?? 0) - amount);
+    }
+  }
+
+  const receivedIncomeSourceIds = new Set(
+    transactions
+      .filter((t) => t.income_source_id && t.date >= monthStart && t.date <= monthEnd)
+      .map((t) => t.income_source_id),
+  );
+  for (const source of incomeSources) {
+    if (
+      !source.is_active ||
+      source.schedule_type !== "fixed_monthly_date" ||
+      source.day_of_month == null ||
+      receivedIncomeSourceIds.has(source.id)
+    ) {
+      continue;
+    }
+    const amount = source.is_variable ? source.estimated_amount ?? 0 : source.expected_amount ?? 0;
+    const expectedDate = shiftedDateThisMonth(source.day_of_month, source.weekend_holiday_rule, now);
+    if (expectedDate <= monthEnd) deltaByDate.set(expectedDate, (deltaByDate.get(expectedDate) ?? 0) + amount);
+  }
+
+  const points: number[] = [];
+  let running = baseline;
+  let d = parseYmd(monthStart);
+  const end = parseYmd(monthEnd);
+  while (d <= end) {
+    running += deltaByDate.get(ymd(d)) ?? 0;
+    points.push(running);
+    d = addDays(d, 1);
+  }
+  return points;
 }

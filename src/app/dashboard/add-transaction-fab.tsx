@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { addTransaction } from "@/app/dashboard/actions";
+import { useSelection } from "@/app/dashboard/history/selection";
 import { CategorySelect } from "@/app/dashboard/category-select";
 import { fieldClass, btnPositiveClass, btnDestructiveClass } from "@/lib/ui";
 import { notify } from "@/lib/toast";
@@ -30,6 +31,11 @@ export function AddTransactionFab({
   const formRef = useRef<HTMLFormElement>(null);
   const [isPending, startTransition] = useTransition();
   const today = new Date().toISOString().slice(0, 10);
+  const { active: selecting } = useSelection();
+
+  // Adding a transaction while bulk-selecting existing ones for deletion isn't a combination the
+  // UI supports -- hide the FAB rather than let it overlap the selection action bar.
+  if (selecting) return null;
 
   return (
     <>

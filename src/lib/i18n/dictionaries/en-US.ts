@@ -45,6 +45,7 @@ export const en_US: Dictionary = {
     widgetsHeading: "Overview widgets",
     categoriesHeading: "Categories",
     sharingHeading: "Sharing",
+    dataExportHeading: "Export your data",
     languageHeading: "Language",
     securityHeading: "Two-factor authentication",
     sessionHeading: "Session",
@@ -120,6 +121,10 @@ export const en_US: Dictionary = {
     deleteTitle: "Delete transaction?",
     deleteBody: '"{description}" ({amount}) will be permanently deleted.',
     linkedEditError: "This transaction is linked to a transfer, bill, or income source. Delete and re-add it instead of editing.",
+    selectButton: "Select",
+    selectedCount: "{count} selected",
+    deleteSelectedTitle: "Delete {count} transactions?",
+    deleteSelectedBody: "This will permanently delete the {count} selected transactions.",
   },
   addTransaction: {
     addButtonLabel: "Add transaction",
@@ -400,6 +405,12 @@ export const en_US: Dictionary = {
       submit: "Verify",
       invalidCode: "That code didn't work. Try again.",
     },
+  },
+  dataExport: {
+    description:
+      "A personal copy of this space's transactions and settings — useful as a backup, or if you ever want to take your data elsewhere.",
+    csvButton: "Download transactions (CSV)",
+    jsonButton: "Download full backup (JSON)",
   },
   mfaSettings: {
     description: "Add an extra step at login using an authenticator app (like Google Authenticator or 1Password).",

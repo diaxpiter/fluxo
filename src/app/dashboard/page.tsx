@@ -7,6 +7,7 @@ import { TransferButton } from "@/app/dashboard/transfer-button";
 import { AddTransactionFab } from "@/app/dashboard/add-transaction-fab";
 import { SpaceSwitcher } from "@/app/dashboard/space-switcher";
 import { PrivacyProvider, PrivacyToggle, SensitiveValue } from "@/components/privacy";
+import { Sparkline } from "@/components/sparkline";
 import { formatCurrency } from "@/lib/currency";
 import { cardClass, linkClass, numericClass } from "@/lib/ui";
 import {
@@ -18,7 +19,14 @@ import {
 import { getCurrentSpace } from "@/lib/spaces";
 import { getDictionary, getLocale } from "@/lib/i18n/dictionary";
 import { format } from "@/lib/i18n/format";
-import { computeWidgetValues, layoutRows, todayYmd, type WidgetKey } from "@/lib/widgets";
+import {
+  computeAccountBalanceTrend,
+  computeProjectionTrend,
+  computeWidgetValues,
+  layoutRows,
+  todayYmd,
+  type WidgetKey,
+} from "@/lib/widgets";
 
 const RECENT_COUNT = 5;
 
@@ -77,6 +85,12 @@ export default async function DashboardPage() {
     includedRecurringBills,
     includedIncomeSources,
   );
+  const projectionTrend = computeProjectionTrend(
+    includedTransactions,
+    includedStartingBalance,
+    includedRecurringBills,
+    includedIncomeSources,
+  );
 
   const today = todayYmd();
   const recentRows = transactions
@@ -115,21 +129,35 @@ export default async function DashboardPage() {
                 <p className="text-sm text-foreground/50">{t.accounts.empty}</p>
               ) : (
                 <div className={cardClass}>
-                  {visibleAccounts.map((account) => (
-                    <div
-                      key={account.id}
-                      className="flex items-center justify-between gap-3 border-b border-foreground/5 p-4 last:border-0"
-                    >
-                      <p className="truncate text-sm text-foreground/70">
-                        {accountDisplayName(account, t.common.mainAccount)}
-                      </p>
-                      <p className={`text-sm font-medium ${numericClass}`}>
+                  {visibleAccounts.map((account) => {
+                    const trend = computeAccountBalanceTrend(
+                      transactions.filter((tx) => tx.account_id === account.id),
+                      account.starting_balance,
+                    );
+                    const trendTone =
+                      trend.at(-1)! > trend[0] ? "positive" : trend.at(-1)! < trend[0] ? "negative" : "neutral";
+
+                    return (
+                      <div
+                        key={account.id}
+                        className="flex flex-col gap-2 border-b border-foreground/5 p-4 last:border-0"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="truncate text-sm text-foreground/70">
+                            {accountDisplayName(account, t.common.mainAccount)}
+                          </p>
+                          <p className={`text-sm font-medium ${numericClass}`}>
+                            <SensitiveValue>
+                              {formatCurrency(balances.get(account.id) ?? account.starting_balance, currency, locale)}
+                            </SensitiveValue>
+                          </p>
+                        </div>
                         <SensitiveValue>
-                          {formatCurrency(balances.get(account.id) ?? account.starting_balance, currency, locale)}
+                          <Sparkline points={trend} tone={trendTone} />
                         </SensitiveValue>
-                      </p>
-                    </div>
-                  ))}
+                      </div>
+                    );
+                  })}
                   <div className="flex items-center justify-between gap-3 bg-foreground/[0.03] p-4">
                     <p className="text-sm font-medium text-foreground/70">{t.accounts.totalLabel}</p>
                     <p className={`text-sm font-semibold ${numericClass}`}>
@@ -152,6 +180,7 @@ export default async function DashboardPage() {
                         value={formatCurrency(widgetValues[w.key], currency, locale)}
                         delayMs={(rowIndex * 2 + i) * 40}
                         tone={toneFor(w.key, widgetValues[w.key])}
+                        trend={w.key === "end_of_month_projection" ? projectionTrend : undefined}
                       />
                     ))}
                   </div>

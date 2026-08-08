@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { updateTransaction, deleteTransaction } from "@/app/dashboard/actions";
+import { useSelection } from "@/app/dashboard/history/selection";
 import { CategorySelect } from "@/app/dashboard/category-select";
 import { formatCurrency } from "@/lib/currency";
 import { cardClass, fieldClass, btnPrimaryClass, btnGhostClass, btnDestructiveClass, linkClass, actionLinkClass, numericClass } from "@/lib/ui";
@@ -23,6 +24,21 @@ type Row = {
   income_source_id?: string | null;
 };
 
+// A fixed-width magnitude column keeps the +/- sign at the same x position on every row --
+// plain right-aligned "sign + amount" text lets the sign drift left/right per row depending on
+// how many digits the amount has.
+function SignedAmount({ amount, currency, locale }: { amount: number; currency: string; locale: string }) {
+  const negative = amount < 0;
+  return (
+    <span className={`inline-flex items-baseline justify-end gap-1 ${negative ? "text-red-400" : "text-emerald-500"}`}>
+      <span>{negative ? "−" : "+"}</span>
+      <span className="inline-block min-w-[10ch] text-right">
+        {formatCurrency(Math.abs(amount), currency, locale)}
+      </span>
+    </span>
+  );
+}
+
 export function TransactionList({
   rows,
   categories,
@@ -43,6 +59,11 @@ export function TransactionList({
   addCategoryT: Dictionary["addCategory"];
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
+  const { active: selecting, selectedIds, toggle: toggleSelected } = useSelection();
+  // Editing and bulk-selecting a row at the same time isn't a state the UI supports -- entering
+  // selection mode mid-edit closes the open edit form instead of leaving it stranded.
+  const openEditId = selecting ? null : editingId;
+
   const categoryName = (id: string | null) => {
     const category = categories.find((c) => c.id === id);
     return category ? categoryDisplayName(category, categoryLabels) : common.uncategorized;
@@ -59,7 +80,7 @@ export function TransactionList({
       {/* Phones: stacked cards, nothing hidden off-screen */}
       <div className="flex flex-col sm:hidden">
         {newestFirst.map((row) =>
-          editingId === row.id ? (
+          openEditId === row.id ? (
             <div key={row.id} className="border-b border-foreground/5 bg-foreground/[0.03] p-4 last:border-0">
               <EditForm
                 row={row}
@@ -72,39 +93,55 @@ export function TransactionList({
               />
             </div>
           ) : (
-            <div key={row.id} className="border-b border-foreground/5 p-4 last:border-0">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{row.description}</p>
-                  <p className="mt-0.5 truncate text-xs text-foreground/50">
-                    {row.date} · {categoryName(row.category_id)}
-                  </p>
-                </div>
-                <div className="shrink-0 text-right">
-                  <p className={`text-sm ${numericClass} ${row.amount < 0 ? "text-red-400" : "text-emerald-500"}`}>
-                    {row.amount >= 0 ? "+" : ""}
-                    {formatCurrency(row.amount, currency, locale)}
-                  </p>
-                  <p className={`mt-0.5 text-xs text-foreground/50 ${numericClass}`}>
-                    {formatCurrency(row.balance, currency, locale)}
-                  </p>
-                </div>
-              </div>
-              <div className="mt-2 flex items-center gap-4">
-                {!row.transfer_group_id && !row.recurring_bill_id && !row.income_source_id && (
-                  <button type="button" onClick={() => setEditingId(row.id)} className={`${actionLinkClass} text-xs`}>
-                    {common.edit}
-                  </button>
-                )}
-                <DeleteButton
-                  id={row.id}
-                  description={row.description}
-                  amount={row.amount}
-                  currency={currency}
-                  locale={locale}
-                  t={t}
-                  common={common}
+            <div key={row.id} className="flex items-start gap-3 border-b border-foreground/5 p-4 last:border-0">
+              {selecting && (
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(row.id)}
+                  onChange={() => toggleSelected(row.id)}
+                  aria-label={row.description}
+                  className="mt-1 h-4 w-4 shrink-0 cursor-pointer accent-emerald-500"
                 />
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{row.description}</p>
+                    <p className="mt-0.5 truncate text-xs text-foreground/50">
+                      {row.date} · {categoryName(row.category_id)}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className={`text-sm ${numericClass}`}>
+                      <SignedAmount amount={row.amount} currency={currency} locale={locale} />
+                    </p>
+                    <p className={`mt-0.5 text-xs text-foreground/50 ${numericClass}`}>
+                      {formatCurrency(row.balance, currency, locale)}
+                    </p>
+                  </div>
+                </div>
+                {!selecting && (
+                  <div className="mt-2 flex items-center gap-4">
+                    {!row.transfer_group_id && !row.recurring_bill_id && !row.income_source_id && (
+                      <button
+                        type="button"
+                        onClick={() => setEditingId(row.id)}
+                        className={`${actionLinkClass} text-xs`}
+                      >
+                        {common.edit}
+                      </button>
+                    )}
+                    <DeleteButton
+                      id={row.id}
+                      description={row.description}
+                      amount={row.amount}
+                      currency={currency}
+                      locale={locale}
+                      t={t}
+                      common={common}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           ),
@@ -116,6 +153,7 @@ export function TransactionList({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-foreground/10 bg-foreground/[0.03] text-left text-xs font-medium text-foreground/50">
+              {selecting && <th className="w-8 px-4 py-2.5" />}
               <th className="px-4 py-2.5 font-medium">{t.date}</th>
               <th className="px-4 py-2.5 font-medium">{t.description}</th>
               <th className="px-4 py-2.5 font-medium">{t.category}</th>
@@ -126,7 +164,7 @@ export function TransactionList({
           </thead>
           <tbody>
             {newestFirst.map((row) =>
-              editingId === row.id ? (
+              openEditId === row.id ? (
                 <tr key={row.id} className="border-b border-foreground/5 bg-foreground/[0.03] last:border-0">
                   <td colSpan={6} className="px-4 py-3">
                     <EditForm
@@ -145,37 +183,49 @@ export function TransactionList({
                   key={row.id}
                   className="border-b border-foreground/5 transition-colors last:border-0 hover:bg-foreground/[0.02]"
                 >
+                  {selecting && (
+                    <td className="px-4 py-2.5">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(row.id)}
+                        onChange={() => toggleSelected(row.id)}
+                        aria-label={row.description}
+                        className="h-4 w-4 cursor-pointer accent-emerald-500"
+                      />
+                    </td>
+                  )}
                   <td className="whitespace-nowrap px-4 py-2.5 text-foreground/50">{row.date}</td>
                   <td className="px-4 py-2.5">{row.description}</td>
                   <td className="px-4 py-2.5 text-foreground/50">{categoryName(row.category_id)}</td>
-                  <td
-                    className={`px-4 py-2.5 text-right ${numericClass} ${
-                      row.amount < 0 ? "text-red-400" : "text-emerald-500"
-                    }`}
-                  >
-                    {row.amount >= 0 ? "+" : ""}
-                    {formatCurrency(row.amount, currency, locale)}
+                  <td className={`px-4 py-2.5 text-right ${numericClass}`}>
+                    <SignedAmount amount={row.amount} currency={currency} locale={locale} />
                   </td>
                   <td className={`px-4 py-2.5 text-right font-medium ${numericClass}`}>
                     {formatCurrency(row.balance, currency, locale)}
                   </td>
                   <td className="px-4 py-2.5 text-right">
-                    <div className="flex items-center justify-end gap-3">
-                      {!row.transfer_group_id && !row.recurring_bill_id && !row.income_source_id && (
-                        <button type="button" onClick={() => setEditingId(row.id)} className={`${linkClass} text-xs`}>
-                          {common.edit}
-                        </button>
-                      )}
-                      <DeleteButton
-                        id={row.id}
-                        description={row.description}
-                        amount={row.amount}
-                        currency={currency}
-                        locale={locale}
-                        t={t}
-                        common={common}
-                      />
-                    </div>
+                    {!selecting && (
+                      <div className="flex items-center justify-end gap-3">
+                        {!row.transfer_group_id && !row.recurring_bill_id && !row.income_source_id && (
+                          <button
+                            type="button"
+                            onClick={() => setEditingId(row.id)}
+                            className={`${linkClass} text-xs`}
+                          >
+                            {common.edit}
+                          </button>
+                        )}
+                        <DeleteButton
+                          id={row.id}
+                          description={row.description}
+                          amount={row.amount}
+                          currency={currency}
+                          locale={locale}
+                          t={t}
+                          common={common}
+                        />
+                      </div>
+                    )}
                   </td>
                 </tr>
               ),

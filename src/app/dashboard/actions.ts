@@ -130,6 +130,35 @@ export async function deleteTransaction(formData: FormData): Promise<ActionResul
   return { ok: true };
 }
 
+export async function deleteTransactions(formData: FormData): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const t = getDictionary(await getLocale()).common;
+  if (!user) return { ok: false, error: t.errorToast };
+
+  const ids = formData.getAll("id").map(String).filter(Boolean);
+  if (ids.length === 0) return { ok: true };
+
+  const { data: selected } = await supabase.from("transactions").select("id, transfer_group_id").in("id", ids);
+  const transferGroupIds = [...new Set((selected ?? []).flatMap((r) => (r.transfer_group_id ? [r.transfer_group_id] : [])))];
+  const plainIds = (selected ?? []).filter((r) => !r.transfer_group_id).map((r) => r.id);
+
+  const [plainResult, transferResult] = await Promise.all([
+    plainIds.length ? supabase.from("transactions").delete().in("id", plainIds) : Promise.resolve({ error: null }),
+    // Delete every leg of any selected transfer together so the ledgers never go out of sync.
+    transferGroupIds.length
+      ? supabase.from("transactions").delete().in("transfer_group_id", transferGroupIds)
+      : Promise.resolve({ error: null }),
+  ]);
+  if (plainResult.error || transferResult.error) return { ok: false, error: t.errorToast };
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/history");
+  return { ok: true };
+}
+
 export async function updateStartingBalance(formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
   const {
